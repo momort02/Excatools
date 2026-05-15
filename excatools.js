@@ -1,7 +1,23 @@
 const API = 'https://excalia.fr/api/hotel';
 const PAGE_SIZE = 30;
 const UA = 'ExcaTools/1.0 (excatools)';
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// On utilise une Map pour un accès ultra-rapide dans renderCard
+let priceHistoryMap = new Map(); 
+const firebaseConfig = {
+    apiKey: "AIzaSyA831PoGY1dzGaI0MgNCI92NmXsEtiW9LU",
+    authDomain: "excatools.firebaseapp.com",
+    projectId: "excatools",
+    storageBucket: "excatools.firebasestorage.app",
+    messagingSenderId: "471103011145",
+    appId: "1:471103011145:web:da2d972cd7d0224b89c298",
+    measurementId: "G-R7RBX78ZD6"
+  };
 let allItems = [];
 let filteredItems = [];
 let currentPage = 1;
@@ -291,36 +307,30 @@ document.getElementById('sortSelect').addEventListener('change', function(e) { c
 
 async function loadPriceHistory() {
   const el = document.getElementById('pricesList');
-  el.innerHTML = '<div class="loading"><div class="loader"></div>Chargement…</div>';
+  if (el) el.innerHTML = '<div class="loading"><div class="loader"></div>Interrogation de Firestore…</div>';
+  
   try {
-    const res = await fetch('/api/price-history');
-    priceHistoryAll = await res.json();
+    // On récupère la collection "price-history" (vérifie le nom dans ta console Firebase)
+    const querySnapshot = await getDocs(collection(db, "price-history"));
+    const data = [];
+    
+    querySnapshot.forEach((doc) => {
+      data.push({ id: doc.id, ...doc.data() });
+    });
+
+    priceHistoryAll = data;
+    
+    // Création de la Map pour que renderCard() trouve les prix instantanément
+    priceHistoryMap = new Map(data.map(item => [item.key, item]));
+    
+    console.log("Données Firestore chargées :", priceHistoryAll.length);
     renderPricesList();
+    
   } catch (e) {
-    el.innerHTML = '<div class="empty">⚠ ' + e.message + '</div>';
+    console.error("Erreur Firestore :", e);
+    if (el) el.innerHTML = '<div class="empty">⚠ Erreur de connexion base de données</div>';
   }
 }
-
-function renderPricesList() {
-  const el = document.getElementById('pricesList');
-  const q = document.getElementById('priceSearch').value.toLowerCase();
-  let data = priceHistoryAll;
-  if (q) data = data.filter(function(d) { return d.name && d.name.toLowerCase().includes(q); });
-  if (data.length === 0) { el.innerHTML = '<div class="empty">Aucun historique disponible — le serveur enregistre les prix toutes les 30s.</div>'; return; }
-  el.innerHTML = data.map(function(d, i) {
-    return '<div class="price-card" style="animation-delay:' + (i * 0.02) + 's" onclick="openChart(\'' + d.key + '\',\'' + (d.name || d.key).replace(/'/g, "\\'") + '\')">' +
-      '<div class="price-card-name">' + (d.name || d.key) + '</div>' +
-      '<div class="price-card-stats">' +
-        '<div class="price-stat"><span class="price-stat-label">Moy.</span><span class="price-stat-value">' + formatPrice(d.lastAvg) + '</span></div>' +
-        '<div class="price-stat"><span class="price-stat-label">Min</span><span class="price-stat-value green">' + formatPrice(d.lastMin) + '</span></div>' +
-        '<div class="price-stat"><span class="price-stat-label">Max</span><span class="price-stat-value">' + formatPrice(d.lastMax) + '</span></div>' +
-      '</div>' +
-      '<div class="price-card-count">' + (d.lastCount || 0) + ' annonces · mis à jour ' + (d.updatedAt ? new Date(d.updatedAt).toLocaleTimeString('fr-FR') : '—') + '</div>' +
-    '</div>';
-  }).join('');
-}
-
-document.getElementById('priceSearch').addEventListener('input', renderPricesList);
 
 // ── CHART MODAL ──
 
@@ -594,12 +604,13 @@ function renderPlayers() {
 function setPlayersSearch(val) { playersSearch = val; renderPlayers(); }
 function setPlayersServer(s) { playersServerFilter = s; renderPlayers(); }
 
-document.addEventListener('DOMContentLoaded', () => {
-  initApp();
-});
-
 async function initApp() {
-  // On charge d'abord l'historique car le rendu des cartes en dépend pour les % de prix
-  await loadPriceHistory(); 
+  // 1. On attend d'abord les données de prix (Firestore)
+  await loadPriceHistory();
+  
+  // 2. Ensuite on charge les items de l'API (Market)
   await loadAll();
 }
+
+// On lance le tout une fois que le DOM est prêt
+document.addEventListener('DOMContentLoaded', initApp);
