@@ -604,13 +604,13 @@ function renderPlayers() {
 function setPlayersSearch(val) { playersSearch = val; renderPlayers(); }
 function setPlayersServer(s) { playersServerFilter = s; renderPlayers(); }
 
+// Remplace l'appel direct loadAll() à la fin par :
+document.addEventListener('DOMContentLoaded', () => {
+  initApp();
+});
+
 async function initApp() {
-  // 1. On attend d'abord les données de prix (Firestore)
-  await loadPriceHistory();
-  
-  // 2. Ensuite on charge les items de l'API (Market)
+  // On charge d'abord l'historique car le rendu des cartes en dépend pour les % de prix
+  await loadPriceHistory(); 
   await loadAll();
 }
-
-// On lance le tout une fois que le DOM est prêt
-document.addEventListener('DOMContentLoaded', initApp);
