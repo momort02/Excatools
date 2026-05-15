@@ -1,39 +1,160 @@
-// --- CONFIGURATION ET IMPORTS FIREBASE ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10/7/firebase-app.js";
 import { 
     getFirestore, collection, addDoc, getDocs, query, orderBy, limit, 
     where, deleteDoc, doc, updateDoc, onSnapshot 
 } from "https://www.gstatic.com/firebasejs/10/7/firebase-firestore.js";
 
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-    apiKey: "TON_API_KEY",
-    authDomain: "excatools.firebaseapp.com",
-    projectId: "excatools",
-    storageBucket: "excatools.appspot.com",
-    messagingSenderId: "ID_MESSAGERIE",
-    appId: "TON_APP_ID"
+  apiKey: "AIzaSyA831PoGY1dzGaI0MgNCI92NmXsEtiW9LU",
+  authDomain: "excatools.firebaseapp.com",
+  projectId: "excatools",
+  storageBucket: "excatools.firebasestorage.app",
+  messagingSenderId: "471103011145",
+  appId: "1:471103011145:web:da2d972cd7d0224b89c298",
+  measurementId: "G-R7RBX78ZD6"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// --- VARIABLES GLOBALES ---
+// --- VARIABLES ---
 const API = 'https://excalia.fr/api/hotel';
 const PAGE_SIZE = 30;
-const UA = 'ExcaTools/1.0 (excatools)';
+const UA = 'ExcaTools/1.0';
+const BASE_PJS = 'https://raw.githubusercontent.com/PrismarineJS/minecraft-assets/master/data/1.21.11/';
 
-let allItems = [];
-let filteredItems = [];
-let currentPage = 1;
-let currentCategory = 'ALL';
-let currentSearch = '';
-let currentSort = 'default';
-let stats = null;
-let priceHistoryAll = [];
-let currentModalKey = null;
-let currentModalName = null;
-let currentChartRange = 24;
+let allItems = [], filteredItems = [], priceHistoryAll = [];
+let currentPage = 1, currentCategory = 'ALL', currentSearch = '', currentSort = 'default';
 let chartInstance = null;
+
+const CAT_FALLBACK = {
+    BLOCKS: { emoji: '🧱', color: '#a16207' },
+    TOOLS: { emoji: '⛏️', color: '#7DD3FC' },
+    WEAPON: { emoji: '⚔️', color: '#ef4444' },
+    ARMOR: { emoji: '🛡️', color: '#6366f1' },
+    FOOD: { emoji: '🍖', color: '#f97316' },
+    POTIONS: { emoji: '🧪', color: '#a855f7' },
+    MISCELLANEOUS: { emoji: '✨', color: '#FACC15' },
+};
+
+// --- NAVIGATION ---
+window.showPage = function(page) {
+    document.querySelectorAll('[id$="Page"]').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+    
+    const target = document.getElementById(page + 'Page');
+    if(target) target.classList.remove('hidden');
+    if(page !== 'market') target?.classList.add('visible');
+
+    const nav = document.getElementById('nav' + page.charAt(0).toUpperCase() + page.slice(1));
+    if(nav) nav.classList.add('active');
+
+    if (page === 'prices') loadPriceHistory();
+    if (page === 'alerts') loadAlerts();
+};
+
+// --- LOGIQUE MARCHÉ ---
+async function loadAll() {
+    try {
+        const res = await fetch(API + '?page=1&pageSize=50');
+        const data = await res.json();
+        allItems = data.list.items;
+        filteredItems = allItems;
+        renderCats(data.stats);
+        renderGrid();
+    } catch (e) { console.error("Erreur API:", e); }
+}
+
+function renderGrid() {
+    const grid = document.getElementById('grid');
+    if(!grid) return;
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const items = filteredItems.slice(start, start + PAGE_SIZE);
+    
+    grid.innerHTML = items.map(item => `
+        <div class="card" onclick="window.openChart('${getItemKey(item.displayName)}', '${parseItemName(item).replace(/'/g, "\\'")}')">
+            <div class="item-name">${parseItemName(item)}</div>
+            <div class="price">${formatPrice(item.price)} ${item.currency}</div>
+            <div class="item-seller">Par ${item.ownerName}</div>
+        </div>
+    `).join('');
+}
+
+function renderCats(stats) {
+    const bar = document.getElementById('catsBar');
+    if(!bar || !stats) return;
+    bar.innerHTML = stats.byCategory.map(c => `
+        <div class="cat-pill ${currentCategory === c.category ? 'active' : ''}" onclick="window.setCategory('${c.category}')">
+            ${c.category} (${c.count})
+        </div>
+    `).join('');
+}
+
+window.setCategory = function(cat) {
+    currentCategory = cat;
+    applyFilters();
+};
+
+function applyFilters() {
+    filteredItems = allItems.filter(i => {
+        const matchCat = currentCategory === 'ALL' || i.category === currentCategory;
+        const matchSearch = parseItemName(i).toLowerCase().includes(currentSearch.toLowerCase());
+        return matchCat && matchSearch;
+    });
+    renderGrid();
+}
+
+// --- PRIX & GRAPHIQUES ---
+async function loadPriceHistory() {
+    const q = query(collection(db, "price_history"), orderBy("updatedAt", "desc"), limit(50));
+    const snap = await getDocs(q);
+    priceHistoryAll = snap.docs.map(d => d.data());
+    renderPricesList();
+}
+
+window.openChart = async function(key, name) {
+    document.getElementById('modalTitle').innerText = name;
+    document.getElementById('chartModal').classList.add('open');
+    
+    const q = query(collection(db, "history_points"), where("key", "==", key), orderBy("ts", "asc"), limit(50));
+    const snap = await getDocs(q);
+    const data = snap.docs.map(d => d.data());
+
+    if(chartInstance) chartInstance.destroy();
+    const ctx = document.getElementById('priceChart').getContext('2d');
+    chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.map(d => new Date(d.ts).toLocaleTimeString()),
+            datasets: [{ label: 'Moyenne', data: data.map(d => d.avg), borderColor: '#FACC15' }]
+        }
+    });
+};
+
+window.closeModal = () => document.getElementById('chartModal').classList.remove('open');
+
+// --- ALERTES ---
+window.loadAlerts = function() {
+    const el = document.getElementById('alertsList');
+    onSnapshot(collection(db, "alerts"), (snap) => {
+        const alerts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        el.innerHTML = alerts.map(a => `
+            <div class="alert-row">
+                <span>${a.itemName} (≤ ${formatPrice(a.maxPrice)})</span>
+                <button onclick="window.deleteAlert('${a.id}')">Supprimer</button>
+            </div>
+        `).join('');
+    });
+};
+
+// --- HELPERS ---
+function getItemKey(dn) { return dn.includes('oraxen') ? dn.match(/oraxen:([a-z_0-9]+)/)[1] : 'vanilla'; }
+function parseItemName(item) { return item.displayName.split(':').pop().replace(/>|_/g, ' '); }
+function formatPrice(p) { return p?.toLocaleString('fr-FR') || '0'; }
+
+// Init
+loadAll();
 let playersData = null;
 let playersSearch = '';
 let playersServerFilter = 'all';
