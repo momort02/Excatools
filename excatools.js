@@ -594,4 +594,12 @@ function renderPlayers() {
 function setPlayersSearch(val) { playersSearch = val; renderPlayers(); }
 function setPlayersServer(s) { playersServerFilter = s; renderPlayers(); }
 
-loadAll();
+document.addEventListener('DOMContentLoaded', () => {
+  initApp();
+});
+
+async function initApp() {
+  // On charge d'abord l'historique car le rendu des cartes en dépend pour les % de prix
+  await loadPriceHistory(); 
+  await loadAll();
+}
