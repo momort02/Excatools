@@ -1,360 +1,569 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10/7/firebase-app.js";
-import { 
-    getFirestore, collection, addDoc, getDocs, query, orderBy, limit, 
-    where, deleteDoc, doc, updateDoc, onSnapshot 
-} from "https://www.gstatic.com/firebasejs/10/7/firebase-firestore.js";
-
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyA831PoGY1dzGaI0MgNCI92NmXsEtiW9LU",
-  authDomain: "excatools.firebaseapp.com",
-  projectId: "excatools",
-  storageBucket: "excatools.firebasestorage.app",
-  messagingSenderId: "471103011145",
-  appId: "1:471103011145:web:da2d972cd7d0224b89c298",
-  measurementId: "G-R7RBX78ZD6"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
-// --- VARIABLES ---
 const API = 'https://excalia.fr/api/hotel';
 const PAGE_SIZE = 30;
-const UA = 'ExcaTools/1.0';
-const BASE_PJS = 'https://raw.githubusercontent.com/PrismarineJS/minecraft-assets/master/data/1.21.11/';
 
-let allItems = [], filteredItems = [], priceHistoryAll = [];
-let currentPage = 1, currentCategory = 'ALL', currentSearch = '', currentSort = 'default';
-let chartInstance = null;
+let allItems = [];
+let filteredItems = [];
+let currentPage = 1;
+let currentCategory = 'ALL';
+let currentSearch = '';
+let currentSort = 'default';
+let stats = null;
+
+const ORAXEN_ICONS = {
+  rune_strength_3: { emoji: '\u2694', color: '#3B82F6' },
+  rune_speed_3: { emoji: '\ud83d\udca8', color: '#3B82F6' },
+  rune_fall_3: { emoji: '\ud83c\udff9', color: '#3B82F6' },
+  cristal_marin: { emoji: '\ud83d\udc8e', color: '#38BDF8' },
+  pierre_celeste: { emoji: '\ud83d\udca0', color: '#FFD700' },
+  pierre_mystique: { emoji: '\ud83d\udca0', color: '#FF9EBB' },
+  premium_houe: { emoji: '\ud83d\udd25', color: '#7DD3FC' },
+  ice_key: { emoji: '\ud83d\udd11', color: '#FACC15' },
+  plume_fly_60m: { emoji: '\ud83e\udeb6', color: '#01ACE1' },
+  potion_generale_t3: { emoji: '\u2728', color: '#8B5CF6' },
+  delicate_hook: { emoji: '\ud83c\udfa3', color: '#FACC15' },
+};
 
 const CAT_FALLBACK = {
-    BLOCKS: { emoji: '🧱', color: '#a16207' },
-    TOOLS: { emoji: '⛏️', color: '#7DD3FC' },
-    WEAPON: { emoji: '⚔️', color: '#ef4444' },
-    ARMOR: { emoji: '🛡️', color: '#6366f1' },
-    FOOD: { emoji: '🍖', color: '#f97316' },
-    POTIONS: { emoji: '🧪', color: '#a855f7' },
-    MISCELLANEOUS: { emoji: '✨', color: '#FACC15' },
+  BLOCKS: { emoji: '\ud83e\uddf1', color: '#a16207' },
+  TOOLS: { emoji: '\u26cf\ufe0f', color: '#7DD3FC' },
+  WEAPON: { emoji: '\u2694\ufe0f', color: '#ef4444' },
+  ARMOR: { emoji: '\ud83d\udee1\ufe0f', color: '#6366f1' },
+  FOOD: { emoji: '\ud83e\udd56', color: '#f97316' },
+  POTIONS: { emoji: '\ud83e\uddea', color: '#a855f7' },
+  MISCELLANEOUS: { emoji: '\u2728', color: '#FACC15' },
 };
 
-// --- NAVIGATION ---
-window.showPage = function(page) {
-    document.querySelectorAll('[id$="Page"]').forEach(el => el.classList.add('hidden'));
-    document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-    
-    const target = document.getElementById(page + 'Page');
-    if(target) target.classList.remove('hidden');
-    if(page !== 'market') target?.classList.add('visible');
+function getItemImage(item) {
+  const dn = item.displayName;
+  const BASE_PJS = 'https://raw.githubusercontent.com/PrismarineJS/minecraft-assets/master/data/1.21.11/';
 
-    const nav = document.getElementById('nav' + page.charAt(0).toUpperCase() + page.slice(1));
-    if(nav) nav.classList.add('active');
+  const oraxenMatch = dn.match(/oraxen:([a-z_0-9]+)/);
+  if (oraxenMatch) {
+    const id = oraxenMatch[1];
+    const fb = CAT_FALLBACK[item.category] || { emoji: '\u2736', color: '#FACC15' };
+    return { type: 'sprite', value: 'textures/' + id + '.png', fallback: fb.emoji, fallbackUrl: BASE_PJS + 'items/' + id + '.png' };
+  }
 
-    if (page === 'prices') loadPriceHistory();
-    if (page === 'alerts') loadAlerts();
-};
+  const vanillaMatch = dn.match(/show_item:([a-z_]+)/);
+  if (vanillaMatch) {
+    const id = vanillaMatch[1];
+    const folder = item.category === 'BLOCKS' ? 'blocks' : 'items';
+    const pjsUrl = BASE_PJS + folder + '/' + id + '.png';
+    const fb = CAT_FALLBACK[item.category] || { emoji: '\ud83d\udce6', color: '#666' };
+    return { type: 'sprite', value: pjsUrl, fallback: fb.emoji, fallbackUrl: 'textures/' + id + '.png' };
+  }
 
-// --- LOGIQUE MARCHÉ ---
-async function loadAll() {
-    try {
-        const res = await fetch(API + '?page=1&pageSize=50');
-        const data = await res.json();
-        allItems = data.list.items;
-        filteredItems = allItems;
-        renderCats(data.stats);
-        renderGrid();
-    } catch (e) { console.error("Erreur API:", e); }
+  const fb = CAT_FALLBACK[item.category] || { emoji: '\ud83d\udce6', color: '#666' };
+  return { type: 'emoji', value: fb.emoji, color: fb.color };
+}
+
+function parseName(displayName) {
+  const langMatch = displayName.match(/<lang:([^>]+)>/);
+  if (langMatch) {
+    const key = langMatch[1];
+    const map = {
+      'block.minecraft.jungle_sapling': 'Pousse de Jungle',
+      'block.minecraft.beacon': 'Balise',
+      'item.minecraft.splash_potion.effect.weakness': 'Potion de Faiblesse',
+      'item.minecraft.enchanted_book': 'Livre Enchant\u00e9',
+    };
+    if (map[key]) return map[key];
+    const parts = key.split('.');
+    return parts[parts.length - 1].replace(/_/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+  }
+  const nameMatch = displayName.match(/text:\\"([^"\\]+)\\"/);
+  if (nameMatch) return nameMatch[1];
+  const customNameMatch = displayName.match(/item_name:'[^']*text:"([^"]+)"/);
+  if (customNameMatch) return customNameMatch[1];
+  return 'Objet Inconnu';
+}
+
+function parseRarity(displayName) {
+  if (displayName.includes('rarelvl3') || displayName.includes('rarity\\":\\"RARE')) return 'rare';
+  if (displayName.includes('rarelvl5') || displayName.includes('epiclvl')) return 'epic';
+  if (displayName.includes('mythic')) return 'mythic';
+  if (displayName.includes('uncommonlvl') || displayName.includes('uncommon')) return 'uncommon';
+  if (displayName.includes('elite')) return 'epic';
+  return 'common';
+}
+
+function parseItemName(item) {
+  const dn = item.displayName;
+  if (dn.includes('oraxen:')) {
+    const oraxenMatch = dn.match(/oraxen:([a-z_0-9]+)/);
+    if (oraxenMatch) {
+      const id = oraxenMatch[1];
+      const names = {
+        rune_strength_3: 'Rune de Tranchant VI',
+        rune_speed_3: 'Rune de Ch\u00e2timent VI',
+        rune_fall_3: 'Rune de Puissance VII',
+        cristal_marin: 'Cristal Marin',
+        pierre_celeste: 'Pierre C\u00e9leste',
+        pierre_mystique: 'Pierre Mystique',
+        premium_houe: 'Houe des Flammes Glaciales',
+        ice_key: 'Cl\u00e9 Premium+',
+        plume_fly_60m: 'Plume de Fly 60min',
+        potion_generale_t3: 'Potion G\u00e9n\u00e9rale 15%',
+        delicate_hook: 'Hame\u00e7on L\u00e9ger',
+      };
+      if (names[id]) return names[id];
+      return id.replace(/_/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+    }
+  }
+  return parseName(dn);
+}
+
+function getQuantity(displayName) {
+  const match = displayName.match(/show_item:[a-z_]+:(\d+)/);
+  if (match && match[1] !== '1') return parseInt(match[1]);
+  return null;
+}
+
+function formatPrice(p) {
+  if (p >= 1000000) return (p / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (p >= 1000) return (p / 1000).toFixed(0) + 'k';
+  return p.toLocaleString('fr-FR');
+}
+
+function timeLeft(expiresAt) {
+  const diff = new Date(expiresAt) - Date.now();
+  if (diff < 0) return { text: 'Expir\u00e9', soon: true };
+  const h = Math.floor(diff / 3600000);
+  const d = Math.floor(h / 24);
+  if (d > 0) return { text: d + 'j ' + (h % 24) + 'h', soon: d < 1 };
+  return { text: h + 'h', soon: h < 6 };
+}
+
+function renderCard(item, idx) {
+  const rarity = parseRarity(item.displayName);
+  const name = parseItemName(item);
+  const qty = getQuantity(item.displayName);
+  const exp = timeLeft(item.expiresAt);
+  const img = getItemImage(item);
+
+  let iconInner;
+  if (img.type === 'sprite') {
+    const fallbackUrl = img.fallbackUrl || null;
+    const fallbackEmoji = img.fallback || '\ud83d\udce6';
+    const onerror = fallbackUrl
+      ? "if(!this.dataset.fb){this.dataset.fb=1;this.src='" + fallbackUrl + "'}else{this.outerHTML='<span style=font-size:1.4rem>" + fallbackEmoji + "</span>'}"
+      : "this.outerHTML='<span style=font-size:1.4rem>" + fallbackEmoji + "</span>'";
+    iconInner = '<img src="' + img.value + '" alt="" onerror="' + onerror + '" style="width:32px;height:32px;image-rendering:pixelated;object-fit:contain;">';
+  } else {
+    iconInner = '<span style="font-size:1.4rem;filter:drop-shadow(0 0 8px ' + img.color + '88)">' + img.value + '</span>';
+  }
+
+  const qtyHtml = qty ? '<span class="qty-badge">\u00d7' + qty + '</span>' : '';
+  const soonClass = exp.soon ? ' soon' : '';
+
+  return '<div class="card" style="animation-delay:' + ((idx % PAGE_SIZE) * 0.02) + 's">' +
+    '<div class="card-header">' +
+      '<div class="item-icon">' + iconInner + qtyHtml + '</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div class="item-name">' + name + '</div>' +
+        '<div class="item-seller">Vendu par <span>' + item.ownerName + '</span></div>' +
+      '</div>' +
+      '<div class="rarity-badge rarity-' + rarity + '">' + rarity + '</div>' +
+    '</div>' +
+    '<div class="card-footer">' +
+      '<div>' +
+        '<div class="price"><span class="price-value">' + formatPrice(item.price) + '</span><span class="price-currency">' + item.currency + '</span></div>' +
+        '<div class="category-tag">' + item.category + '</div>' +
+      '</div>' +
+      '<div class="expires' + soonClass + '">\u23f1 ' + exp.text + '</div>' +
+    '</div>' +
+  '</div>';
 }
 
 function renderGrid() {
-    const grid = document.getElementById('grid');
-    if(!grid) return;
-    const start = (currentPage - 1) * PAGE_SIZE;
-    const items = filteredItems.slice(start, start + PAGE_SIZE);
-    
-    grid.innerHTML = items.map(item => `
-        <div class="card" onclick="window.openChart('${getItemKey(item.displayName)}', '${parseItemName(item).replace(/'/g, "\\'")}')">
-            <div class="item-name">${parseItemName(item)}</div>
-            <div class="price">${formatPrice(item.price)} ${item.currency}</div>
-            <div class="item-seller">Par ${item.ownerName}</div>
-        </div>
-    `).join('');
+  const grid = document.getElementById('grid');
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const end = start + PAGE_SIZE;
+  const page = filteredItems.slice(start, end);
+
+  if (page.length === 0) {
+    grid.innerHTML = '<div class="empty">\u2736 Aucun objet trouv\u00e9 \u2736</div>';
+    return;
+  }
+
+  grid.innerHTML = page.map(function(item, i){ return renderCard(item, i); }).join('');
+  document.getElementById('totalCount').innerHTML =
+    '<span>' + filteredItems.length + '</span> objets trouv\u00e9s sur <span>' + allItems.length + '</span> actifs';
+  renderPagination();
 }
 
-function renderCats(stats) {
-    const bar = document.getElementById('catsBar');
-    if(!bar || !stats) return;
-    bar.innerHTML = stats.byCategory.map(c => `
-        <div class="cat-pill ${currentCategory === c.category ? 'active' : ''}" onclick="window.setCategory('${c.category}')">
-            ${c.category} (${c.count})
-        </div>
-    `).join('');
+function renderPagination() {
+  const total = Math.ceil(filteredItems.length / PAGE_SIZE);
+  const pag = document.getElementById('pagination');
+  if (total <= 1) { pag.innerHTML = ''; return; }
+
+  let html = '<button class="page-btn" onclick="goPage(' + (currentPage-1) + ')"' + (currentPage===1?' disabled':'') + '>\u25c4</button>';
+
+  for (let i = 1; i <= total; i++) {
+    if (i === 1 || i === total || Math.abs(i - currentPage) <= 2) {
+      html += '<button class="page-btn' + (i===currentPage?' active':'') + '" onclick="goPage(' + i + ')">' + i + '</button>';
+    } else if (Math.abs(i - currentPage) === 3) {
+      html += '<span class="page-info">\u2026</span>';
+    }
+  }
+
+  html += '<button class="page-btn" onclick="goPage(' + (currentPage+1) + ')"' + (currentPage===total?' disabled':'') + '>\u25ba</button>';
+  pag.innerHTML = html;
 }
 
-window.setCategory = function(cat) {
-    currentCategory = cat;
-    applyFilters();
-};
+function goPage(p) {
+  const total = Math.ceil(filteredItems.length / PAGE_SIZE);
+  if (p < 1 || p > total) return;
+  currentPage = p;
+  renderGrid();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 
 function applyFilters() {
-    filteredItems = allItems.filter(i => {
-        const matchCat = currentCategory === 'ALL' || i.category === currentCategory;
-        const matchSearch = parseItemName(i).toLowerCase().includes(currentSearch.toLowerCase());
-        return matchCat && matchSearch;
+  let items = allItems.slice();
+
+  if (currentCategory !== 'ALL') {
+    items = items.filter(function(i){ return i.category === currentCategory; });
+  }
+
+  if (currentSearch) {
+    const q = currentSearch.toLowerCase();
+    items = items.filter(function(i){
+      return parseItemName(i).toLowerCase().includes(q) || i.ownerName.toLowerCase().includes(q);
     });
+  }
+
+  if (currentSort === 'price_asc') items.sort(function(a,b){ return a.price - b.price; });
+  else if (currentSort === 'price_desc') items.sort(function(a,b){ return b.price - a.price; });
+  else if (currentSort === 'seller') items.sort(function(a,b){ return a.ownerName.localeCompare(b.ownerName); });
+
+  filteredItems = items;
+  currentPage = 1;
+  renderGrid();
+}
+
+function renderCats() {
+  if (!stats) return;
+  const bar = document.getElementById('catsBar');
+  const all = allItems.length;
+
+  let html = '<div class="cat-pill' + (currentCategory==='ALL'?' active':'') + '" onclick="setCategory(\'ALL\')">' +
+    '<span class="cat-pill-name">Tout</span>' +
+    '<span class="cat-pill-count">' + all + '</span>' +
+    '<span class="cat-pill-avg">&nbsp;</span>' +
+    '</div>';
+
+  stats.byCategory.forEach(function(c) {
+    const fb = CAT_FALLBACK[c.category] || { emoji: '\ud83d\udce6' };
+    html += '<div class="cat-pill' + (currentCategory===c.category?' active':'') + '" onclick="setCategory(\'' + c.category + '\')">' +
+      '<span class="cat-pill-name">' + fb.emoji + ' ' + c.category.toLowerCase() + '</span>' +
+      '<span class="cat-pill-count">' + c.count + '</span>' +
+      '<span class="cat-pill-avg">moy. ' + formatPrice(Math.round(c.avgPrice)) + '</span>' +
+      '</div>';
+  });
+
+  bar.innerHTML = html;
+}
+
+function setCategory(cat) {
+  currentCategory = cat;
+  renderCats();
+  applyFilters();
+}
+
+async function loadAll() {
+  try {
+    const res = await fetch(API + '?page=1&pageSize=30');
+    const data = await res.json();
+
+    stats = data.stats;
+    document.getElementById('statActive').textContent = data.stats.activeCount.toLocaleString('fr-FR');
+    document.getElementById('statSold').textContent = data.stats.soldLast24h.toLocaleString('fr-FR');
+    document.getElementById('statCats').textContent = data.stats.byCategory.length;
+
+    const total = data.list.total;
+    const pages = Math.ceil(total / 30);
+    const fetches = [];
+    for (let p = 1; p <= pages; p++) {
+      fetches.push(fetch(API + '?page=' + p + '&pageSize=30').then(function(r){ return r.json(); }));
+    }
+
+    const results = await Promise.all(fetches);
+    allItems = results.reduce(function(acc, r){ return acc.concat(r.list.items); }, []);
+    filteredItems = allItems.slice();
+
+    renderCats();
     renderGrid();
+  } catch(e) {
+    document.getElementById('grid').innerHTML = '<div class="empty">\u26a0 Erreur de connexion au serveur</div>';
+    console.error(e);
+  }
 }
 
-// --- PRIX & GRAPHIQUES ---
-async function loadPriceHistory() {
-    const q = query(collection(db, "price_history"), orderBy("updatedAt", "desc"), limit(50));
-    const snap = await getDocs(q);
-    priceHistoryAll = snap.docs.map(d => d.data());
-    renderPricesList();
+document.getElementById('searchInput').addEventListener('input', function(e) {
+  currentSearch = e.target.value.trim();
+  applyFilters();
+});
+
+document.getElementById('sortSelect').addEventListener('change', function(e) {
+  currentSort = e.target.value;
+  applyFilters();
+});
+
+
+function _showPage(page) {
+  const market = document.getElementById('marketPage');
+  const island = document.getElementById('islandPage');
+  const players = document.getElementById('playersPage');
+  const navM = document.getElementById('navMarket');
+  const navI = document.getElementById('navIsland');
+  const navP = document.getElementById('navPlayers');
+
+  market.classList.toggle('hidden', page !== 'market');
+  island.classList.toggle('visible', page === 'island');
+  players.classList.toggle('visible', page === 'players');
+  navM.classList.toggle('active', page === 'market');
+  navI.classList.toggle('active', page === 'island');
+  navP.classList.toggle('active', page === 'players');
+
+  if (page === 'players') loadPlayers();
 }
 
-window.openChart = async function(key, name) {
-    document.getElementById('modalTitle').innerText = name;
-    document.getElementById('chartModal').classList.add('open');
-    
-    const q = query(collection(db, "history_points"), where("key", "==", key), orderBy("ts", "asc"), limit(50));
-    const snap = await getDocs(q);
-    const data = snap.docs.map(d => d.data());
+function formatNum(n) {
+  if (!n && n !== 0) return '—';
+  if (n >= 1000000) return (n/1000000).toFixed(1).replace(/\.0$/,'') + 'M';
+  if (n >= 1000) return (n/1000).toFixed(1).replace(/\.0$/,'') + 'k';
+  return Number(n).toLocaleString('fr-FR');
+}
 
-    if(chartInstance) chartInstance.destroy();
-    const ctx = document.getElementById('priceChart').getContext('2d');
-    chartInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: data.map(d => new Date(d.ts).toLocaleTimeString()),
-            datasets: [{ label: 'Moyenne', data: data.map(d => d.avg), borderColor: '#FACC15' }]
+function renderIslandData(data) {
+  const members = data.members || [];
+  const warps = data.warps || [];
+
+  const owner = members.find(function(m){ return m.role === 'OWNER'; });
+
+  let membersHtml = members.length === 0
+    ? '<div class="empty-section">Aucun membre</div>'
+    : members.map(function(m) {
+        const role = m.role || 'MEMBER';
+        return '<div class="member-row">' +
+          '<div class="member-name">' +
+            '<img class="member-avatar" src="https://mc-heads.net/avatar/' + m.name + '/24" alt="" onerror="this.style.display=\'none\'">' +
+            m.name +
+          '</div>' +
+          '<span class="member-role role-' + role + '">' + role + '</span>' +
+        '</div>';
+      }).join('');
+
+  let warpsHtml = warps.length === 0
+    ? '<div class="empty-section">Aucun warp public</div>'
+    : warps.map(function(w) {
+        const coords = (w.x !== undefined) ? w.x + ', ' + w.y + ', ' + w.z : '—';
+        return '<div class="warp-row">' +
+          '<div class="warp-name">' + (w.name || 'warp') + '</div>' +
+          '<div class="warp-coords">' + coords + '</div>' +
+        '</div>';
+      }).join('');
+
+  const extraKeys = Object.keys(data).filter(function(k){
+    return !['id','ownerName','balance','members','warps'].includes(k);
+  });
+
+  let extraSections = '';
+  if (extraKeys.length > 0) {
+    extraKeys.forEach(function(k) {
+      const val = data[k];
+      let inner = '';
+      if (Array.isArray(val)) {
+        if (val.length === 0) {
+          inner = '<div class="empty-section">Vide</div>';
+        } else if (typeof val[0] === 'object') {
+          inner = '<div class="json-section">' + JSON.stringify(val, null, 2) + '</div>';
+        } else {
+          inner = '<div class="tag-list">' + val.map(function(v){ return '<span class="tag">' + v + '</span>'; }).join('') + '</div>';
         }
+      } else if (typeof val === 'object' && val !== null) {
+        inner = '<div class="json-section">' + JSON.stringify(val, null, 2) + '</div>';
+      } else {
+        inner = '<div style="font-family:Cinzel,serif;font-size:1.1rem;color:var(--gold)">' + val + '</div>';
+      }
+      extraSections += '<div class="island-section">' +
+        '<div class="section-title">✦ ' + k + '</div>' +
+        inner +
+        '</div>';
     });
-};
+  }
 
-window.closeModal = () => document.getElementById('chartModal').classList.remove('open');
+  return '<div class="island-result">' +
+    '<div class="island-hero">' +
+      '<div class="island-hero-top">' +
+        '<div>' +
+          '<div class="island-owner">' + (data.ownerName || owner && owner.name || '?') + '</div>' +
+          '<div class="island-id">ID : ' + (data.id || '—') + '</div>' +
+        '</div>' +
+        '<div class="island-balance">' +
+          '<div class="island-balance-value">' + formatNum(data.balance) + '</div>' +
+          '<div class="island-balance-label">Balance</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="island-sections">' +
+      '<div class="island-section">' +
+        '<div class="section-title">⚔ Membres (' + members.length + ')</div>' +
+        membersHtml +
+      '</div>' +
+      '<div class="island-section">' +
+        '<div class="section-title">⚑ Warps (' + warps.length + ')</div>' +
+        warpsHtml +
+      '</div>' +
+      extraSections +
+    '</div>' +
+  '</div>';
+}
 
-// --- ALERTES ---
-window.loadAlerts = function() {
-    const el = document.getElementById('alertsList');
-    onSnapshot(collection(db, "alerts"), (snap) => {
-        const alerts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        el.innerHTML = alerts.map(a => `
-            <div class="alert-row">
-                <span>${a.itemName} (≤ ${formatPrice(a.maxPrice)})</span>
-                <button onclick="window.deleteAlert('${a.id}')">Supprimer</button>
-            </div>
-        `).join('');
-    });
-};
+async function searchIsland() {
+  const input = document.getElementById('islandInput').value.trim();
+  const result = document.getElementById('islandResult');
+  if (!input) return;
 
-// --- HELPERS ---
-function getItemKey(dn) { return dn.includes('oraxen') ? dn.match(/oraxen:([a-z_0-9]+)/)[1] : 'vanilla'; }
-function parseItemName(item) { return item.displayName.split(':').pop().replace(/>|_/g, ' '); }
-function formatPrice(p) { return p?.toLocaleString('fr-FR') || '0'; }
+  result.innerHTML = '<div style="text-align:center;padding:3rem"><div class="loader" style="margin:0 auto"></div></div>';
 
-// Init
-loadAll();
+  try {
+    const res = await fetch('https://excalia.fr/api/island-stats/island/' + encodeURIComponent(input));
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    result.innerHTML = renderIslandData(data);
+  } catch(e) {
+    result.innerHTML = '<div class="island-error">\u26a0 Île introuvable ou erreur serveur<br><span style="font-size:0.6rem;opacity:0.5;margin-top:0.5rem;display:block">' + e.message + '</span></div>';
+  }
+}
+
+
 let playersData = null;
 let playersSearch = '';
 let playersServerFilter = 'all';
 let playersRefreshTimer = null;
 
-const BASE_PJS = 'https://raw.githubusercontent.com/PrismarineJS/minecraft-assets/master/data/1.21.11/';
-
-const ORAXEN_ICONS = {
-    rune_strength_3: { emoji: '⚔', color: '#3B82F6' },
-    rune_speed_3: { emoji: '💨', color: '#3B82F6' },
-    rune_fall_3: { emoji: '🏹', color: '#3B82F6' },
-    cristal_marin: { emoji: '💎', color: '#38BDF8' },
-    pierre_celeste: { emoji: '💠', color: '#FFD700' },
-    pierre_mystique: { emoji: '💠', color: '#FF9EBB' },
-    premium_houe: { emoji: '🔥', color: '#7DD3FC' },
-    ice_key: { emoji: '🔑', color: '#FACC15' },
-    plume_fly_60m: { emoji: '🪶', color: '#01ACE1' },
-    potion_generale_t3: { emoji: '✨', color: '#8B5CF6' },
-    delicate_hook: { emoji: '🎣', color: '#FACC15' },
-};
-
-const CAT_FALLBACK = {
-    BLOCKS: { emoji: '🧱', color: '#a16207' },
-    TOOLS: { emoji: '⛏️', color: '#7DD3FC' },
-    WEAPON: { emoji: '⚔️', color: '#ef4444' },
-    ARMOR: { emoji: '🛡️', color: '#6366f1' },
-    FOOD: { emoji: '🍖', color: '#f97316' },
-    POTIONS: { emoji: '🧪', color: '#a855f7' },
-    MISCELLANEOUS: { emoji: '✨', color: '#FACC15' },
-};
-
-// --- FONCTIONS DE NAVIGATION (EXPORTÉES POUR LE HTML) ---
-window.showPage = function(page) {
-    const pages = ['market', 'prices', 'alerts', 'island', 'players'];
-    pages.forEach(p => {
-        const el = document.getElementById(p + 'Page');
-        const nav = document.getElementById('nav' + p.charAt(0).toUpperCase() + p.slice(1));
-        if (!el) return;
-        if (p === 'market') el.classList.toggle('hidden', page !== 'market');
-        else el.classList.toggle('visible', page === p);
-        if (nav) nav.classList.toggle('active', page === p);
+async function loadPlayers() {
+  try {
+    const res = await fetch('https://excalia.fr/api/online-players', {
+      headers: { 'User-Agent': 'ExcaliaHotelSite/1.0 (excalia.fr)' }
     });
-    if (page === 'prices') loadPriceHistory();
-    if (page === 'alerts') loadAlerts();
-    if (page === 'players') loadPlayers();
-};
-
-// --- LOGIQUE CORE (PARSING) ---
-function getItemKey(displayName) {
-    const oraxenMatch = displayName.match(/oraxen:([a-z_0-9]+)/);
-    if (oraxenMatch) return oraxenMatch[1];
-    const vanillaMatch = displayName.match(/show_item:([a-z_]+)/);
-    if (vanillaMatch) return vanillaMatch[1];
-    return 'unknown';
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    playersData = await res.json();
+    renderPlayers();
+    schedulePlayersRefresh();
+  } catch(e) {
+    document.getElementById('playersContent').innerHTML =
+      '<div class="empty">\u26a0 Erreur de chargement : ' + e.message + '</div>';
+  }
 }
 
-function parseItemName(item) {
-    const dn = item.displayName;
-    const oraxenMatch = dn.match(/oraxen:([a-z_0-9]+)/);
-    if (oraxenMatch) {
-        const names = {
-            rune_strength_3: 'Rune de Tranchant VI', rune_speed_3: 'Rune de Châtiment VI',
-            rune_fall_3: 'Rune de Puissance VII', cristal_marin: 'Cristal Marin',
-            pierre_celeste: 'Pierre Céleste', pierre_mystique: 'Pierre Mystique',
-            premium_houe: 'Houe des Flammes Glaciales', ice_key: 'Clé Premium+',
-            plume_fly_60m: 'Plume de Fly 60min', potion_generale_t3: 'Potion Générale 15%',
-            delicate_hook: 'Hameçon Léger',
-        };
-        return names[oraxenMatch[1]] || oraxenMatch[1].replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+function schedulePlayersRefresh() {
+  if (playersRefreshTimer) clearTimeout(playersRefreshTimer);
+  playersRefreshTimer = setTimeout(function() {
+    if (document.getElementById('playersPage').classList.contains('visible')) {
+      loadPlayers();
     }
-    const langMatch = dn.match(/<lang:([^>]+)>/);
-    if (langMatch) {
-        const parts = langMatch[1].split('.');
-        return parts[parts.length - 1].replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    }
-    return 'Objet Inconnu';
+  }, 15000);
 }
 
-function formatPrice(p) {
-    if (!p && p !== 0) return '—';
-    if (p >= 1000000) return (p / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
-    if (p >= 1000) return (p / 1000).toFixed(0) + 'k';
-    return p.toLocaleString('fr-FR');
-}
+function renderPlayers() {
+  if (!playersData) return;
+  const d = playersData;
+  const now = new Date().toLocaleTimeString('fr-FR');
 
-// --- MARCHÉ (HÔTEL DES VENTES) ---
-async function loadAll() {
-    try {
-        const res = await fetch(API + '?page=1&pageSize=30', { headers: { 'User-Agent': UA } });
-        const data = await res.json();
-        stats = data.stats;
-        document.getElementById('statActive').textContent = data.stats.activeCount.toLocaleString('fr-FR');
-        document.getElementById('statSold').textContent = data.stats.soldLast24h.toLocaleString('fr-FR');
-        
-        const pages = Math.ceil(data.list.total / 30);
-        const fetches = [];
-        for (let p = 2; p <= pages; p++) {
-            fetches.push(fetch(API + '?page=' + p + '&pageSize=30', { headers: { 'User-Agent': UA } }).then(r => r.json()));
-        }
-        const results = await Promise.all(fetches);
-        allItems = [data, ...results].flatMap(r => r.list.items);
-        filteredItems = allItems.slice();
-        renderCats();
-        renderGrid();
-    } catch (e) {
-        document.getElementById('grid').innerHTML = '<div class="empty">⚠ Erreur de connexion API</div>';
-    }
-}
+  let players = d.players || [];
 
-// --- HISTORIQUE DES PRIX (FIRESTORE) ---
-async function loadPriceHistory() {
-    const el = document.getElementById('pricesList');
-    el.innerHTML = '<div class="loading"><div class="loader"></div>Chargement Firestore…</div>';
-    try {
-        const q = query(collection(db, "price_history"), orderBy("updatedAt", "desc"), limit(100));
-        const snap = await getDocs(q);
-        priceHistoryAll = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        renderPricesList();
-    } catch (e) {
-        el.innerHTML = '<div class="empty">⚠ ' + e.message + '</div>';
-    }
-}
-
-function renderPricesList() {
-    const el = document.getElementById('pricesList');
-    const q = document.getElementById('priceSearch').value.toLowerCase();
-    let data = priceHistoryAll;
-    if (q) data = data.filter(d => d.name && d.name.toLowerCase().includes(q));
-    
-    if (data.length === 0) {
-        el.innerHTML = '<div class="empty">Aucun historique disponible</div>';
-        return;
-    }
-    
-    el.innerHTML = data.map((d, i) => `
-        <div class="price-card" style="animation-delay:${i * 0.02}s" onclick="openChart('${d.key}','${(d.name || d.key).replace(/'/g, "\\'")}')">
-            <div class="price-card-name">${d.name || d.key}</div>
-            <div class="price-card-stats">
-                <div class="price-stat"><span class="price-stat-label">Moy.</span><span class="price-stat-value">${formatPrice(d.lastAvg)}</span></div>
-                <div class="price-stat"><span class="price-stat-label">Min</span><span class="price-stat-value green">${formatPrice(d.lastMin)}</span></div>
-            </div>
-            <div class="price-card-count">${d.lastCount || 0} annonces · ${new Date(d.updatedAt).toLocaleTimeString('fr-FR')}</div>
-        </div>
-    `).join('');
-}
-
-// --- ALERTES (TEMPS RÉEL FIRESTORE) ---
-window.loadAlerts = function() {
-    const el = document.getElementById('alertsList');
-    onSnapshot(collection(db, "alerts"), (snap) => {
-        const alerts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        if (alerts.length === 0) {
-            el.innerHTML = '<div class="empty">Aucune alerte configurée</div>';
-            return;
-        }
-        el.innerHTML = alerts.map(a => `
-            <div class="alert-row">
-                <div class="alert-item-name">${a.itemName}</div>
-                <div class="alert-price">≤ ${formatPrice(a.maxPrice)}</div>
-                <span class="alert-status ${a.active ? 'active' : 'paused'}">${a.active ? 'actif' : 'pause'}</span>
-                <div class="alert-actions">
-                    <button class="btn-sm" onclick="toggleAlert('${a.id}', ${!a.active})">${a.active ? 'Activer' : 'Pause'}</button>
-                    <button class="btn-sm danger" onclick="deleteAlert('${a.id}')">Suppr.</button>
-                </div>
-            </div>
-        `).join('');
+  if (playersServerFilter !== 'all') {
+    players = players.filter(function(p) {
+      return p.serverIds && p.serverIds.includes(playersServerFilter);
     });
-};
+  }
 
-window.createAlert = async function() {
-    const itemInput = document.getElementById('alertItemInput').value.trim();
-    const maxPrice = document.getElementById('alertPrice').value;
-    const webhookUrl = document.getElementById('alertWebhook').value.trim();
+  if (playersSearch) {
+    const q = playersSearch.toLowerCase();
+    players = players.filter(function(p) { return p.name.toLowerCase().includes(q); });
+  }
 
-    if (!itemInput || !maxPrice || !webhookUrl) return alert('Champs requis');
+  const byServer = d.byServer || {};
+  const serverKeys = Object.keys(byServer);
 
-    try {
-        await addDoc(collection(db, "alerts"), {
-            itemKey: itemInput.toLowerCase().replace(/ /g, '_'),
-            itemName: itemInput,
-            maxPrice: Number(maxPrice),
-            webhookUrl: webhookUrl,
-            active: true,
-            createdAt: Date.now()
-        });
-        alert("Alerte créée !");
-    } catch (e) { alert(e.message); }
-};
+  let serverPillsHtml = serverKeys.map(function(s) {
+    return '<div class="server-pill">' +
+      '<div class="server-pill-name">' + s + '</div>' +
+      '<div class="server-pill-count">' + byServer[s] + '</div>' +
+    '</div>';
+  }).join('');
 
-window.toggleAlert = async function(id, active) {
-    await updateDoc(doc(db, "alerts", id), { active });
-};
+  let serverFilterHtml = '<button class="filter-btn ' + (playersServerFilter==='all'?'active':'') + '" data-server="all">Tous</button>';
+  serverKeys.forEach(function(s) {
+    serverFilterHtml += '<button class="filter-btn ' + (playersServerFilter===s?'active':'') + '" data-server="' + s + '">' + s + '</button>';
+  });
 
-window.deleteAlert = async function(id) {
-    if (confirm("Supprimer l'alerte ?")) await deleteDoc(doc(db, "alerts", id));
-};
+  let cardsHtml = players.length === 0
+    ? '<div class="empty">Aucun joueur trouvé</div>'
+    : players.map(function(p, i) {
+        const grade = p.grade;
+        const gradeHtml = grade
+          ? '<div class="player-grade" style="color:' + grade.color + '">' + grade.name + '</div>'
+          : '<div class="player-grade" style="color:var(--text-dim)">Sans grade</div>';
+        const serversHtml = (p.serverIds || []).map(function(s) {
+          return '<span class="server-tag">' + s + '</span>';
+        }).join('');
+        return '<div class="player-card" style="animation-delay:' + (i * 0.015) + 's">' +
+          '<img class="player-avatar" src="https://mc-heads.net/avatar/' + p.uuid + '/36" alt="" onerror="this.onerror=null;this.src=\'https://mc-heads.net/avatar/' + p.name + '/36\'">' +
+          '<div class="player-info">' +
+            '<div class="player-name">' + p.name + '</div>' +
+            gradeHtml +
+            '<div class="player-servers">' + serversHtml + '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
 
-// --- AUTRES FONCTIONS (MISC) ---
-window.setCategory = function(cat) { currentCategory = cat; renderCats(); applyFilters(); };
-window.goPage = function(p) { currentPage = p; renderGrid(); window.scrollTo(0,0); };
+  document.getElementById('playersContent').innerHTML =
+    '<div class="players-header">' +
+      '<div>' +
+        '<div class="players-title"><span class="online-dot"></span>Joueurs en ligne</div>' +
+        '<div class="total-online">' + d.total + ' <span style="font-size:0.9rem;color:var(--text-dim)">connectés</span></div>' +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.4rem">' +
+        '<button class="refresh-btn" id="playersRefreshBtn">↺ Actualiser</button>' +
+        '<div class="last-update">Mis à jour à ' + now + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="server-pills">' + serverPillsHtml + '</div>' +
+    '<div class="players-filters">' +
+      '<input class="players-search" type="text" placeholder="Chercher un joueur…" value="' + playersSearch + '" oninput="setPlayersSearch(this.value)">' +
+      serverFilterHtml +
+    '</div>' +
+    '<div class="players-grid">' + cardsHtml + '</div>';
+}
 
-// Lancement initial
+function setPlayersSearch(val) {
+  playersSearch = val;
+  renderPlayers();
+}
+
+function setPlayersServer(s) {
+  playersServerFilter = s;
+  renderPlayers();
+}
+
+
+function showPage(page) {
+  var ids = {market:'marketPage', island:'islandPage', players:'playersPage'};
+  var navIds = {market:'navMarket', island:'navIsland', players:'navPlayers'};
+  Object.keys(ids).forEach(function(p) {
+    var el = document.getElementById(ids[p]);
+    var nav = document.getElementById(navIds[p]);
+    if (!el || !nav) return;
+    if (p === 'market') { el.classList.toggle('hidden', page !== 'market'); }
+    else { el.classList.toggle('visible', page === p); }
+    nav.classList.toggle('active', page === p);
+  });
+  if (page === 'players') loadPlayers();
+}
+
 loadAll();
+if(window._pendingPage){ _showPage(window._pendingPage); window._pendingPage=null; }
