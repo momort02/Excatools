@@ -2,33 +2,30 @@ const fetch = require('node-fetch');
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 
-// Connexion via le Secret GitHub
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 initializeApp({ credential: cert(serviceAccount) });
 const db = getFirestore();
 
-const EXCALIA_API = 'https://excalia.fr/api/hotel';
-const UA = 'ExcaTools/1.0 (excatools)';
+// ... (Copie ici tes fonctions parseItemName, getItemKey, fetchAllListings du server.js original)
 
-// --- TES FONCTIONS DE PARSING (Gardées du code original) ---
-function parseItemName(displayName) { /* ... */ }
-function getItemKey(displayName) { /* ... */ }
-async function fetchAllListings() { /* ... */ }
-async function recordPrices(items) { /* ... */ }
-async function checkAlerts(items) { /* ... */ }
-async function sendDiscordWebhook(url, data) { /* ... */ }
-
-// --- FONCTION PRINCIPALE ---
-async function runCycle() {
-  try {
+async function run() {
+    console.log("Début du cycle...");
     const items = await fetchAllListings();
-    await recordPrices(items);
-    await checkAlerts(items);
-    console.log('✅ Cycle réussi');
-  } catch (e) {
-    console.error('❌ Erreur:', e.message);
-    process.exit(1);
-  }
+    
+    // 1. Sauvegarde les prix moyens par item
+    // Tu peux regrouper par itemKey et faire la moyenne
+    
+    // 2. Vérification des alertes
+    const alertsSnap = await db.collection('alerts').where('active', '==', true).get();
+    for (const alertDoc of alertsSnap.docs) {
+        const alert = alertDoc.data();
+        const matches = items.filter(i => getItemKey(i.displayName) === alert.itemKey && i.price <= alert.maxPrice);
+        
+        if (matches.length > 0) {
+            console.log(`Alerte déclenchée pour ${alert.itemName}`);
+            // Envoi Webhook Discord ici
+        }
+    }
 }
 
-runCycle();
+run();
