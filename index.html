@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Excatools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Pro:ital,wght@0,300;0,400;1,300;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="excatools.css">
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-title">EXCALIA</div>
+    <div class="logo-sub">Hôtel des Ventes &amp; Îles</div>
+    <div class="logo-divider"></div>
+  </div>
+  <nav class="nav">
+    <button class="nav-btn active" id="navMarket" onclick="showPage('market')">⚔ Marché</button>
+    <button class="nav-btn" id="navIsland" onclick="showPage('island')">🏝 Îles</button>
+    <button class="nav-btn" id="navPlayers" onclick="showPage('players')">👥 En ligne</button>
+  </nav>
+  <div class="header-stats">
+    <div class="stat">
+      <div class="stat-value" id="statActive">—</div>
+      <div class="stat-label">Annonces actives</div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat">
+      <div class="stat-value" id="statSold">—</div>
+      <div class="stat-label">Vendus (24h)</div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat">
+      <div class="stat-value" id="statCats">—</div>
+      <div class="stat-label">Catégories</div>
+    </div>
+  </div>
+</header>
+
+<div id="marketPage">
+  <main>
+    <div class="cats-bar" id="catsBar"></div>
+    <div class="controls">
+      <div class="search-wrap">
+        <input type="search" id="searchInput" placeholder="Rechercher un objet, un vendeur…">
+      </div>
+      <select class="sort-select" id="sortSelect">
+        <option value="default">Tri : récents</option>
+        <option value="price_asc">Prix croissant</option>
+        <option value="price_desc">Prix décroissant</option>
+        <option value="seller">Par vendeur</option>
+      </select>
+    </div>
+    <div class="total-bar">
+      <div class="total-count" id="totalCount"></div>
+    </div>
+    <div id="grid" class="grid">
+      <div class="loading"><div class="loader"></div>Chargement de l'inventaire…</div>
+    </div>
+    <div class="pagination" id="pagination"></div>
+  </main>
+</div>
+
+<div id="islandPage">
+  <div class="island-search-wrap">
+    <div class="island-search-title">Rechercher une île par <span>ID</span></div>
+    <div style="font-size:0.78rem;color:var(--text-dim);text-align:center;font-style:italic;max-width:400px">
+      Utilise <code style="background:var(--dark4);padding:0.1rem 0.4rem;color:var(--gold);font-size:0.75rem">/is info</code> en jeu pour obtenir l'ID de ton île.
+    </div>
+    <div class="island-input-row">
+      <input type="text" id="islandInput" placeholder="Ex: a1b2c3d4-e5f6-..." onkeydown="if(event.key==='Enter')searchIsland()">
+      <button onclick="searchIsland()">✦ Chercher</button>
+    </div>
+  </div>
+  <div id="islandResult"></div>
+</div>
+
+<div id="playersPage">
+  <div style="max-width:900px;margin:0 auto;padding:2rem 2rem 4rem">
+    <div id="playersContent"><div class="loading"><div class="loader"></div>Chargement…</div></div>
+  </div>
+</div>
+
+<script src="excatools.js"></script>
+</body>
+</html>
