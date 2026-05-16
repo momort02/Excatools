@@ -624,31 +624,99 @@ window.searchIsland = async () => {
 };
 
 function renderIslandData(data) {
-  const members = data.members || [], warps = data.warps || [];
+  const members = data.members || [];
+  const materials = data.materials || [];
+
+  // ── Membres
+  const roleLabel = { OWNER: '👑 Proprio', CO_OWNER: '⭐ Co-Proprio', MEMBER: '⚔ Membre', GUEST: '👤 Invité' };
   const membersHtml = members.length
-    ? members.map(m => `<div class="member-row"><div class="member-name"><img class="member-avatar" src="https://mc-heads.net/avatar/${m.name}/24" alt="" onerror="this.style.display='none'">${m.name}</div><span class="member-role role-${m.role || 'MEMBER'}">${m.role || 'MEMBER'}</span></div>`).join('')
+    ? members.map(m => `
+        <div class="member-row">
+          <div class="member-name">
+            <img class="member-avatar" src="https://mc-heads.net/avatar/${m.name}/24" alt="" onerror="this.style.display='none'">
+            ${m.name}
+          </div>
+          <span class="member-role role-${m.role || 'MEMBER'}">${roleLabel[m.role] || m.role}</span>
+        </div>`).join('')
     : '<div class="empty-section">Aucun membre</div>';
-  const warpsHtml = warps.length
-    ? warps.map(w => `<div class="warp-row"><div class="warp-name">${w.name || 'warp'}</div><div class="warp-coords">${w.x !== undefined ? w.x + ', ' + w.y + ', ' + w.z : '—'}</div></div>`).join('')
-    : '<div class="empty-section">Aucun warp public</div>';
-  const extraKeys = Object.keys(data).filter(k => !['id','ownerName','balance','members','warps'].includes(k));
-  const extraHtml = extraKeys.map(k => {
-    const val = data[k];
-    const inner = Array.isArray(val)
-      ? (val.length ? (typeof val[0] === 'object' ? `<div class="json-section">${JSON.stringify(val, null, 2)}</div>` : `<div class="tag-list">${val.map(v => `<span class="tag">${v}</span>`).join('')}</div>`) : '<div class="empty-section">Vide</div>')
-      : typeof val === 'object' && val !== null ? `<div class="json-section">${JSON.stringify(val, null, 2)}</div>`
-      : `<div style="font-family:Cinzel,serif;font-size:1.1rem;color:var(--gold)">${val}</div>`;
-    return `<div class="island-section"><div class="section-title">✦ ${k}</div>${inner}</div>`;
-  }).join('');
+
+  // ── Matériaux (agrégés par type)
+  const matAgg = {};
+  for (const m of materials) {
+    if (!matAgg[m.material]) matAgg[m.material] = { stock: 0, totalValue: 0, unitValue: m.unitValue };
+    matAgg[m.material].stock += m.stock;
+    matAgg[m.material].totalValue += m.totalValue;
+  }
+  const totalValue = Object.values(matAgg).reduce((s, m) => s + m.totalValue, 0);
+  const materialsHtml = Object.entries(matAgg).length
+    ? `<table style="width:100%;border-collapse:collapse;font-size:0.75rem">
+        <thead><tr style="color:var(--text-dim);text-align:left">
+          <th style="padding:4px 8px">Matériau</th>
+          <th style="padding:4px 8px;text-align:right">Stock</th>
+          <th style="padding:4px 8px;text-align:right">Val. unit.</th>
+          <th style="padding:4px 8px;text-align:right">Val. totale</th>
+        </tr></thead>
+        <tbody>
+          ${Object.entries(matAgg).sort((a, b) => b[1].totalValue - a[1].totalValue).map(([mat, v]) => `
+            <tr style="border-top:1px solid rgba(250,204,21,0.06)">
+              <td style="padding:4px 8px;color:var(--gold)">${mat.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</td>
+              <td style="padding:4px 8px;text-align:right">${v.stock}</td>
+              <td style="padding:4px 8px;text-align:right;color:var(--text-dim)">${v.unitValue}</td>
+              <td style="padding:4px 8px;text-align:right;color:#22C55E">${v.totalValue}</td>
+            </tr>`).join('')}
+          <tr style="border-top:1px solid rgba(250,204,21,0.15);font-weight:bold">
+            <td style="padding:6px 8px" colspan="3">Total</td>
+            <td style="padding:6px 8px;text-align:right;color:#22C55E">${totalValue}</td>
+          </tr>
+        </tbody>
+      </table>`
+    : '<div class="empty-section">Aucun matériau</div>';
+
+  // ── Réputation
+  const rep = data.reputation || {};
+  const repHtml = `<div style="display:flex;gap:1.5rem;font-size:0.8rem">
+    <div><span style="color:var(--text-dim)">Moyenne</span><br><span style="color:var(--gold);font-size:1.1rem">${rep.avg ?? '—'}</span></div>
+    <div><span style="color:var(--text-dim)">Votes</span><br><span style="color:var(--gold);font-size:1.1rem">${rep.count ?? '—'}</span></div>
+  </div>`;
+
+  // ── Stats rapides
+  const statsHtml = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:0.6rem;margin-bottom:0.5rem">
+      ${[
+        ['📐 Taille', data.size ?? '—'],
+        ['👥 Membres max', data.maxMembers ?? '—'],
+        ['⚙ Générateur', data.generator ?? '—'],
+        ['🚀 Warps', data.warps ?? '—'],
+        ['⭐ Valeur', data.value ?? '—'],
+        ['💰 Balance', formatPrice(data.balance)],
+      ].map(([label, val]) => `
+        <div style="background:rgba(250,204,21,0.04);border:1px solid rgba(250,204,21,0.1);border-radius:8px;padding:0.5rem 0.75rem">
+          <div style="font-size:0.65rem;color:var(--text-dim)">${label}</div>
+          <div style="font-size:0.9rem;color:var(--gold);font-weight:bold">${val}</div>
+        </div>`).join('')}
+    </div>`;
+
+  const owner = members.find(m => m.role === 'OWNER');
+
   return `<div class="island-result">
     <div class="island-hero"><div class="island-hero-top">
-      <div><div class="island-owner">⚑ ${data.ownerName || '?'}</div><div class="island-id">ID : ${data.id || '—'}</div></div>
-      <div style="text-align:right"><div class="island-balance-value">${formatPrice(data.balance)}</div><div class="island-balance-label">Balance</div></div>
+      <div>
+        <div class="island-owner">⚑ ${owner?.name || data.ownerName || '?'}</div>
+        <div class="island-id">ID : ${data.islandId || data.id || '—'}</div>
+        <div style="font-size:0.65rem;color:var(--text-dim);margin-top:2px">
+          Créée le ${data.createdAt ? new Date(data.createdAt).toLocaleDateString('fr-FR') : '—'}
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div class="island-balance-value">${formatPrice(data.balance)}</div>
+        <div class="island-balance-label">Balance</div>
+      </div>
     </div></div>
     <div class="island-sections">
-      <div class="island-section"><div class="section-title">⚔ Membres (${members.length})</div>${membersHtml}</div>
-      <div class="island-section"><div class="section-title">⚑ Warps (${warps.length})</div>${warpsHtml}</div>
-      ${extraHtml}
+      <div class="island-section"><div class="section-title">📊 Statistiques</div>${statsHtml}</div>
+      <div class="island-section"><div class="section-title">⭐ Réputation</div>${repHtml}</div>
+      <div class="island-section"><div class="section-title">⚔ Membres (${members.length}/${data.maxMembers ?? '?'})</div>${membersHtml}</div>
+      <div class="island-section"><div class="section-title">🧱 Matériaux (valeur totale : ${totalValue})</div>${materialsHtml}</div>
     </div>
   </div>`;
 }
