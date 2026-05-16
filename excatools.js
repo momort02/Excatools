@@ -60,13 +60,27 @@ window.showPage = function(page) {
 };
 
 function getItemKey(dn) {
+  const oraxenId = dn.match(/oraxen:id[^a-z_0-9][^"]*"([a-z_0-9]+)"/);
+  if (oraxenId) return oraxenId[1];
   const o = dn.match(/oraxen:([a-z_0-9]+)/); if (o) return o[1];
   const v = dn.match(/show_item:([a-z_]+)/); if (v) return v[1];
   return null;
 }
 
+function stripSmallCaps(str) {
+  const map = {'ᴀ':'a','ʙ':'b','ᴄ':'c','ᴅ':'d','ᴇ':'e','ꜰ':'f','ɢ':'g','ʜ':'h','ɪ':'i','ᴊ':'j','ᴋ':'k','ʟ':'l','ᴍ':'m','ɴ':'n','ᴏ':'o','ᴘ':'p','ǫ':'q','ʀ':'r','ꜱ':'s','ᴛ':'t','ᴜ':'u','ᴠ':'v','ᴡ':'w','ʏ':'y','ᴢ':'z'};
+  return str.split('').map(c => map[c] !== undefined ? map[c] : c).join('');
+}
+
 function parseItemName(item) {
   const dn = item.displayName;
+  const itemNameMatch = dn.match(/\],text:"([^"]{2,60})"/) || dn.match(/lang:chat\.square_brackets:'<[^>]+>([^<'"]{2,60})/);
+  if (itemNameMatch) {
+    const cleaned = stripSmallCaps(itemNameMatch[1]).trim().replace(/\s+/g, ' ');
+    if (cleaned.length > 1) return cleaned.replace(/\b\w/g, c => c.toUpperCase());
+  }
+  const oraxenId = dn.match(/oraxen:id[^a-z_0-9][^"]*"([a-z_0-9]+)"/);
+  if (oraxenId) return ORAXEN_NAMES[oraxenId[1]] || oraxenId[1].replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   const o = dn.match(/oraxen:([a-z_0-9]+)/);
   if (o) return ORAXEN_NAMES[o[1]] || o[1].replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   const l = dn.match(/<lang:([^>]+)>/);
@@ -93,10 +107,12 @@ function parseRarity(dn) {
 
 function getItemImage(item) {
   const dn = item.displayName;
-  const o = dn.match(/oraxen:([a-z_0-9]+)/);
-  if (o) {
+  const oraxenId = dn.match(/oraxen:id[^a-z_0-9][^"]*"([a-z_0-9]+)"/);
+  const oraxenModel = dn.match(/oraxen:([a-z_0-9]+)/);
+  const oraxenKey = oraxenId ? oraxenId[1] : (oraxenModel ? oraxenModel[1] : null);
+  if (oraxenKey) {
     const fb = CAT_FALLBACK[item.category] || { emoji: '✦', color: '#FACC15' };
-    return { type: 'sprite', value: 'textures/' + o[1] + '.png', fallback: fb.emoji, fallbackUrl: BASE_PJS + 'items/' + o[1] + '.png' };
+    return { type: 'sprite', value: 'textures/' + oraxenKey + '.png', fallback: fb.emoji, fallbackUrl: BASE_PJS + 'items/' + oraxenKey + '.png' };
   }
   const v = dn.match(/show_item:([a-z_]+)/);
   if (v) {
