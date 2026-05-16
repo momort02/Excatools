@@ -10,26 +10,41 @@ initializeApp({ credential: cert(serviceAccount) });
 const db = getFirestore();
 
 function getItemKey(displayName) {
-  const oraxen = displayName.match(/oraxen:([a-z_0-9]+)/);
-  if (oraxen) return oraxen[1];
+  const oraxenId = displayName.match(/oraxen:id[^a-z_0-9][^"]*"([a-z_0-9]+)"/);
+  if (oraxenId) return oraxenId[1];
+  const oraxenModel = displayName.match(/oraxen:([a-z_0-9]+)/);
+  if (oraxenModel) return oraxenModel[1];
   const vanilla = displayName.match(/show_item:([a-z_]+)/);
   if (vanilla) return vanilla[1];
   return null;
 }
 
+function stripSmallCaps(str) {
+  const map = {'ᴀ':'a','ʙ':'b','ᴄ':'c','ᴅ':'d','ᴇ':'e','ꜰ':'f','ɢ':'g','ʜ':'h','ɪ':'i','ᴊ':'j','ᴋ':'k','ʟ':'l','ᴍ':'m','ɴ':'n','ᴏ':'o','ᴘ':'p','ǫ':'q','ʀ':'r','ꜱ':'s','ᴛ':'t','ᴜ':'u','ᴠ':'v','ᴡ':'w','x':'x','ʏ':'y','ᴢ':'z','ɴ':'n','ᴄ':'c','ʜ':'h','ᴀ':'a'};
+  return str.split('').map(c => map[c] !== undefined ? map[c] : c).join('');
+}
+
 function getItemName(displayName) {
-  const oraxen = displayName.match(/oraxen:([a-z_0-9]+)/);
-  if (oraxen) {
+  const itemNameMatch = displayName.match(/\],text:"([^"]{2,60})"/) || displayName.match(/lang:chat\.square_brackets:'<[^>]+>([^<'"]{2,60})/);
+  if (itemNameMatch) {
+    const cleaned = stripSmallCaps(itemNameMatch[1]).trim().replace(/\s+/g, ' ');
+    if (cleaned.length > 1) return cleaned.replace(/\b\w/g, c => c.toUpperCase());
+  }
+  const oraxenId = displayName.match(/oraxen:id[^a-z_0-9][^"]*"([a-z_0-9]+)"/);
+  const key = oraxenId ? oraxenId[1] : null;
+  if (key) {
     const names = {
       rune_strength_3: 'Rune de Tranchant VI', rune_speed_3: 'Rune de Châtiment VI',
       rune_fall_3: 'Rune de Puissance VII', cristal_marin: 'Cristal Marin',
       pierre_celeste: 'Pierre Céleste', pierre_mystique: 'Pierre Mystique',
       premium_houe: 'Houe des Flammes Glaciales', ice_key: 'Clé Premium+',
       plume_fly_60m: 'Plume de Fly 60min', potion_generale_t3: 'Potion Générale 15%',
-      delicate_hook: 'Hameçon Léger',
+      delicate_hook: 'Hameçon Léger', baie_sucre_t1: 'Baies Sucrées T1',
     };
-    return names[oraxen[1]] || oraxen[1].replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    return names[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   }
+  const oraxenModel = displayName.match(/oraxen:([a-z_0-9]+)/);
+  if (oraxenModel) return oraxenModel[1].replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   const lang = displayName.match(/<lang:([^>]+)>/);
   if (lang) {
     const map = {
