@@ -235,13 +235,24 @@ function getItemImage(item) {
   const oraxenKey = oraxenId ? oraxenId[1] : (oraxenModel ? oraxenModel[1] : null);
   if (oraxenKey) {
     const fb = CAT_FALLBACK[item.category] || { emoji: '✦', color: '#FACC15' };
-    return { type: 'sprite', value: 'textures/' + oraxenKey + '.png', fallback: fb.emoji, fallbackUrl: BASE_PJS + 'items/' + oraxenKey + '.png' };
+    // On essaie directement PrismarineJS, sans passer par /textures/ local
+    return {
+      type: 'sprite',
+      value: BASE_PJS + 'items/' + oraxenKey + '.png',
+      fallback: fb.emoji,
+      fallbackUrl: null  // pas de second fallback URL, on tombe sur l'emoji
+    };
   }
   const v = dn.match(/show_item:([a-z_]+)/);
   if (v) {
     const folder = item.category === 'BLOCKS' ? 'blocks' : 'items';
     const fb = CAT_FALLBACK[item.category] || { emoji: '📦', color: '#666' };
-    return { type: 'sprite', value: BASE_PJS + folder + '/' + v[1] + '.png', fallback: fb.emoji, fallbackUrl: 'textures/' + v[1] + '.png' };
+    return {
+      type: 'sprite',
+      value: BASE_PJS + folder + '/' + v[1] + '.png',
+      fallback: fb.emoji,
+      fallbackUrl: null
+    };
   }
   const fb = CAT_FALLBACK[item.category] || { emoji: '📦', color: '#666' };
   return { type: 'emoji', value: fb.emoji, color: fb.color };
@@ -273,6 +284,11 @@ function renderCard(item, idx) {
   const exp = timeLeft(item.expiresAt);
   const img = getItemImage(item);
   const key = getItemKey(item.displayName);
+  if (img.type === 'sprite') {
+  iconInner = `<img src="${img.value}" alt="" 
+    onerror="this.outerHTML='<span style=font-size:1.4rem>${img.fallback}</span>'" 
+    style="width:32px;height:32px;image-rendering:pixelated;object-fit:contain;">`;
+};
 
   let iconInner;
   if (img.type === 'sprite') {
