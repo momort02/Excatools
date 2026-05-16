@@ -235,24 +235,13 @@ function getItemImage(item) {
   const oraxenKey = oraxenId ? oraxenId[1] : (oraxenModel ? oraxenModel[1] : null);
   if (oraxenKey) {
     const fb = CAT_FALLBACK[item.category] || { emoji: '✦', color: '#FACC15' };
-    // On essaie directement PrismarineJS, sans passer par /textures/ local
-    return {
-      type: 'sprite',
-      value: BASE_PJS + 'items/' + oraxenKey + '.png',
-      fallback: fb.emoji,
-      fallbackUrl: null  // pas de second fallback URL, on tombe sur l'emoji
-    };
+    return { type: 'sprite', value: 'textures/' + oraxenKey + '.png', fallback: fb.emoji, fallbackUrl: BASE_PJS + 'items/' + oraxenKey + '.png' };
   }
   const v = dn.match(/show_item:([a-z_]+)/);
   if (v) {
     const folder = item.category === 'BLOCKS' ? 'blocks' : 'items';
     const fb = CAT_FALLBACK[item.category] || { emoji: '📦', color: '#666' };
-    return {
-      type: 'sprite',
-      value: BASE_PJS + folder + '/' + v[1] + '.png',
-      fallback: fb.emoji,
-      fallbackUrl: null
-    };
+    return { type: 'sprite', value: BASE_PJS + folder + '/' + v[1] + '.png', fallback: fb.emoji, fallbackUrl: 'textures/' + v[1] + '.png' };
   }
   const fb = CAT_FALLBACK[item.category] || { emoji: '📦', color: '#666' };
   return { type: 'emoji', value: fb.emoji, color: fb.color };
@@ -284,11 +273,6 @@ function renderCard(item, idx) {
   const exp = timeLeft(item.expiresAt);
   const img = getItemImage(item);
   const key = getItemKey(item.displayName);
-  if (img.type === 'sprite') {
-  iconInner = `<img src="${img.value}" alt="" 
-    onerror="this.outerHTML='<span style=font-size:1.4rem>${img.fallback}</span>'" 
-    style="width:32px;height:32px;image-rendering:pixelated;object-fit:contain;">`;
-};
 
   let iconInner;
   if (img.type === 'sprite') {
@@ -762,19 +746,10 @@ window.toggleMenu = function() {
 };
 
 const originalShowPage = window.showPage;
-window.showPage = function(page) {
-  ['market', 'prices', 'alerts', 'island', 'players'].forEach(p => {
-    const el = document.getElementById(p + 'Page');
-    const nav = document.getElementById('nav' + p.charAt(0).toUpperCase() + p.slice(1));
-    if (el) {
-      if (p === 'market') el.classList.toggle('hidden', page !== 'market');
-      else el.classList.toggle('visible', page === p);
-    }
-    if (nav) nav.classList.toggle('active', page === p);  // ← guard ajouté
-  });
-  if (page === 'prices') loadPriceHistory();
-  if (page === 'alerts') { loadAlerts(); loadPriceHistoryForAutocomplete(); }
-  if (page === 'players') loadPlayers();
+window.showPage = function(pageId) {
+  originalShowPage(pageId);
+  const nav = document.getElementById('mainNav');
+  if (nav.classList.contains('open')) toggleMenu();
 };
 
 function renderPlayers() {
