@@ -547,6 +547,28 @@ async function loadPlayers() {
   }
 }
 
+window.toggleMenu = function() {
+    const nav = document.getElementById('mainNav');
+    const btn = document.getElementById('burgerBtn');
+    nav.classList.toggle('open');
+    btn.classList.toggle('open');
+}
+
+// Modifie ta fonction showPage existante pour fermer le menu auto
+const originalShowPage = window.showPage;
+window.showPage = function(pageId) {
+    // On appelle la logique d'origine
+    originalShowPage(pageId);
+    
+    // On ferme le menu si on est sur mobile
+    const nav = document.getElementById('mainNav');
+    const btn = document.getElementById('burgerBtn');
+    if (nav.classList.contains('open')) {
+        toggleMenu();
+    }
+};
+
+
 function renderPlayers() {
   if (!playersData) return;
   const d = playersData;
