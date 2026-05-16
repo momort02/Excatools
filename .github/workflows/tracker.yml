@@ -2,12 +2,14 @@ name: ExcaTools Price Tracker
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '*/10 * * * *'
   workflow_dispatch:
 
 jobs:
   track:
     runs-on: ubuntu-latest
+    timeout-minutes: 6
+
     steps:
       - uses: actions/checkout@v4
 
@@ -21,8 +23,18 @@ jobs:
         run: npm ci
         working-directory: scripts
 
-      - name: Run tracker
+      - name: Run tracker loop (every 30s for 5min)
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: node tracker.js
+        run: |
+          (END=$((SECONDS + 570))
+          while [ $SECONDS -lt $END ]; do
+            echo "--- Cycle at $(date) ---"
+            node tracker.js
+            REMAINING=$((END - SECONDS))
+            if [ $REMAINING -gt 30 ]; then
+              sleep 30
+            fi
+          done
         working-directory: scripts
+
