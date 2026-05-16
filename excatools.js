@@ -74,25 +74,91 @@ function stripSmallCaps(str) {
 
 function parseItemName(item) {
   const dn = item.displayName;
-  const itemNameMatch = dn.match(/\],text:"([^"]{2,60})"/) || dn.match(/lang:chat\.square_brackets:'<[^>]+>([^<'"]{2,60})/);
-  if (itemNameMatch) {
-    const cleaned = stripSmallCaps(itemNameMatch[1]).trim().replace(/\s+/g, ' ');
-    if (cleaned.length > 1) return cleaned.replace(/\b\w/g, c => c.toUpperCase());
+
+  // ── 1. custom_name avec extra:[{color, text}, ...]  (clef_vote, clef_premium, gemme, etc.)
+  const customNameMatch = dn.match(/custom_name:'(\{[^']+\})'/);
+  if (customNameMatch) {
+    try {
+      // Normalise le SNBt-like en JSON parseable
+      const json = customNameMatch[1]
+        .replace(/([{,])\s*([a-zA-Z_]+)\s*:/g, '$1"$2":')  // clés sans guillemets
+        .replace(/:(\d+)b/g, ':$1')                          // 0b/1b → 0/1
+        .replace(/,\s*"italic":\s*\d+/g, '');               // retire italic (peut casser)
+      const obj = JSON.parse(json);
+      if (obj.extra && Array.isArray(obj.extra)) {
+        const name = obj.extra.map(s => (typeof s === 'object' ? s.text || '' : s)).join('').trim();
+        if (name.length > 1) return stripSmallCaps(name);
+      }
+      if (obj.text && obj.text.length > 1) return stripSmallCaps(obj.text);
+    } catch (_) {
+      // fallback : extraction directe des text par regex
+      const texts = [...customNameMatch[1].matchAll(/"text"\s*:\s*"([^"]*)"/g)];
+      const name = texts.map(m => m[1]).join('').trim();
+      if (name.length > 1) return stripSmallCaps(name);
+    }
   }
+
+  // ── 2. item_name simple string  (lingot_dacier_brut : item_name:'"✦ ʟɪɴɢᴏᴛ…"')
+  const simpleNameMatch = dn.match(/item_name:'"([^'"]{2,80})"'/);
+  if (simpleNameMatch) {
+    return stripSmallCaps(simpleNameMatch[1].trim());
+  }
+
+  // ── 3. item_name avec extra JSON  (block-breaker, pierre_mystique, épée aventurier…)
+  const itemNameJson = dn.match(/item_name:'(\{[^']+\})'/);
+  if (itemNameJson) {
+    try {
+      const json = itemNameJson[1]
+        .replace(/([{,])\s*([a-zA-Z_]+)\s*:/g, '$1"$2":')
+        .replace(/:(\d+)b/g, ':$1');
+      const obj = JSON.parse(json);
+      // Parcours récursif de l'arbre extra
+      function extractText(node) {
+        if (typeof node === 'string') return node;
+        if (!node || typeof node !== 'object') return '';
+        let t = node.text || '';
+        if (Array.isArray(node.extra)) t += node.extra.map(extractText).join('');
+        return t;
+      }
+      const name = extractText(obj).trim();
+      if (name.length > 1) return stripSmallCaps(name);
+    } catch (_) {
+      // regex fallback : extrait tous les text dans item_name
+      const texts = [...itemNameJson[1].matchAll(/"text"\s*:\s*"([^"]*)"/g)];
+      const name = texts.map(m => m[1]).join('').trim();
+      if (name.length > 1) return stripSmallCaps(name);
+    }
+  }
+
+  // ── 4. MiniMessage dans lang:chat.square_brackets (retire toutes les balises)
+  const miniMsg = dn.match(/lang:chat\.square_brackets:'([\s\S]+?)'\s*>/);
+  if (miniMsg) {
+    const name = miniMsg[1].replace(/<[^>]+>/g, '').trim();
+    if (name.length > 1) return stripSmallCaps(name);
+  }
+
+  // ── 5. Vanilla lang key  (iron_block, apple, netherite_boots…)
+  const langKey = dn.match(/<lang:(block|item)\.minecraft\.([a-z_]+)>/);
+  if (langKey) {
+    const MC_NAMES = {
+      iron_block: 'Bloc de Fer', gold_block: 'Bloc d\'Or', diamond_block: 'Bloc de Diamant',
+      netherite_boots: 'Bottes en Netherite', netherite_chestplate: 'Plastron en Netherite',
+      netherite_leggings: 'Jambières en Netherite', netherite_helmet: 'Casque en Netherite',
+      netherite_sword: 'Épée en Netherite', netherite_scrap: 'Débris Anciens',
+      apple: 'Pomme', bamboo: 'Bambou',
+      beacon: 'Balise', jungle_sapling: 'Pousse de Jungle',
+      enchanted_book: 'Livre Enchanté',
+    };
+    const key = langKey[2];
+    return MC_NAMES[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  // ── 6. Oraxen ID fallback
   const oraxenId = dn.match(/oraxen:id[^a-z_0-9][^"]*"([a-z_0-9]+)"/);
   if (oraxenId) return ORAXEN_NAMES[oraxenId[1]] || oraxenId[1].replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   const o = dn.match(/oraxen:([a-z_0-9]+)/);
   if (o) return ORAXEN_NAMES[o[1]] || o[1].replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-  const l = dn.match(/<lang:([^>]+)>/);
-  if (l) {
-    const map = {
-      'block.minecraft.jungle_sapling': 'Pousse de Jungle', 'block.minecraft.beacon': 'Balise',
-      'item.minecraft.splash_potion.effect.weakness': 'Potion de Faiblesse', 'item.minecraft.enchanted_book': 'Livre Enchanté',
-    };
-    if (map[l[1]]) return map[l[1]];
-    const parts = l[1].split('.');
-    return parts[parts.length - 1].replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-  }
+
   return 'Objet Inconnu';
 }
 
