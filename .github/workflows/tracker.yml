@@ -8,8 +8,6 @@ on:
 jobs:
   track:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
-
     steps:
       - uses: actions/checkout@v4
 
@@ -23,17 +21,8 @@ jobs:
         run: npm ci
         working-directory: scripts
 
-      - name: Run tracker loop (every 30s for 5min)
+      - name: Run tracker
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: |
-          END=$((SECONDS + 270))
-          while [ $SECONDS -lt $END ]; do
-            echo "--- Cycle at $(date) ---"
-            node tracker.js
-            REMAINING=$((END - SECONDS))
-            if [ $REMAINING -gt 30 ]; then
-              sleep 30
-            fi
-          done
+        run: node tracker.js
         working-directory: scripts
