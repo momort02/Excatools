@@ -36,6 +36,60 @@ const ORAXEN_NAMES = {
   delicate_hook: 'Hameçon Léger',
 };
 
+const MC_NAMES = {
+  iron_block: 'Bloc de Fer', gold_block: 'Bloc d\'Or', diamond_block: 'Bloc de Diamant',
+  netherite_boots: 'Bottes en Netherite', netherite_chestplate: 'Plastron en Netherite',
+  netherite_leggings: 'Jambières en Netherite', netherite_helmet: 'Casque en Netherite',
+  netherite_sword: 'Épée en Netherite', netherite_scrap: 'Débris Anciens',
+  apple: 'Pomme', bamboo: 'Bambou', beacon: 'Balise',
+  jungle_sapling: 'Pousse de Jungle', enchanted_book: 'Livre Enchanté',
+  splash_potion: 'Potion Jetable', iron_ingot: 'Lingot de Fer',
+  gold_ingot: 'Lingot d\'Or', diamond: 'Diamant', emerald: 'Émeraude',
+  netherite_ingot: 'Lingot de Netherite',
+};
+
+const ENCHANT_NAMES = {
+  'minecraft:mending': 'Réparation',
+  'minecraft:protection': 'Protection',
+  'minecraft:unbreaking': 'Solidité',
+  'minecraft:sharpness': 'Tranchant',
+  'minecraft:efficiency': 'Efficacité',
+  'minecraft:fortune': 'Fortune',
+  'minecraft:silk_touch': 'Toucher de Soie',
+  'minecraft:looting': 'Butin',
+  'minecraft:fire_aspect': 'Aspect de Feu',
+  'minecraft:knockback': 'Recul',
+  'minecraft:sweeping_edge': 'Taille en Éventail',
+  'minecraft:depth_strider': 'Foulée des Profondeurs',
+  'minecraft:feather_falling': 'Chute Amortie',
+  'minecraft:blast_protection': 'Protection Explosions',
+  'minecraft:fire_protection': 'Protection Feu',
+  'minecraft:projectile_protection': 'Protection Projectiles',
+  'minecraft:respiration': 'Respiration',
+  'minecraft:aqua_affinity': 'Affinité Aquatique',
+  'minecraft:thorns': 'Épines',
+  'minecraft:frost_walker': 'Pas Givrés',
+  'minecraft:soul_speed': 'Vitesse des Âmes',
+  'minecraft:swift_sneak': 'Furtivité Rapide',
+  'minecraft:power': 'Puissance',
+  'minecraft:punch': 'Percussion',
+  'minecraft:flame': 'Flamme',
+  'minecraft:infinity': 'Infini',
+  'minecraft:luck_of_the_sea': 'Chance de la Mer',
+  'minecraft:lure': 'Appât',
+  'minecraft:channeling': 'Canalisation',
+  'minecraft:impaling': 'Embrocher',
+  'minecraft:loyalty': 'Loyauté',
+  'minecraft:riptide': 'Raz-de-Marée',
+  'minecraft:multishot': 'Multitir',
+  'minecraft:piercing': 'Pénétration',
+  'minecraft:quick_charge': 'Chargement Rapide',
+  'minecraft:bane_of_arthropods': 'Fléau des Arthropodes',
+  'minecraft:smite': 'Châtiment',
+};
+
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
+
 const CAT_FALLBACK = {
   BLOCKS: { emoji: '🧱', color: '#a16207' }, TOOLS: { emoji: '⛏️', color: '#7DD3FC' },
   WEAPON: { emoji: '⚔️', color: '#ef4444' }, ARMOR: { emoji: '🛡️', color: '#6366f1' },
@@ -68,31 +122,100 @@ function getItemKey(dn) {
 }
 
 function stripSmallCaps(str) {
-  const map = {'ᴀ':'a','ʙ':'b','ᴄ':'c','ᴅ':'d','ᴇ':'e','ꜰ':'f','ɢ':'g','ʜ':'h','ɪ':'i','ᴊ':'j','ᴋ':'k','ʟ':'l','ᴍ':'m','ɴ':'n','ᴏ':'o','ᴘ':'p','ǫ':'q','ʀ':'r','ꜱ':'s','ᴛ':'t','ᴜ':'u','ᴠ':'v','ᴡ':'w','ʏ':'y','ᴢ':'z'};
-  return str.split('').map(c => map[c] !== undefined ? map[c] : c).join('');
+  const map = {
+    'ᴀ':'a','ʙ':'b','ᴄ':'c','ᴅ':'d','ᴇ':'e','ꜰ':'f','ɢ':'g','ʜ':'h','ɪ':'i',
+    'ᴊ':'j','ᴋ':'k','ʟ':'l','ᴍ':'m','ɴ':'n','ᴏ':'o','ᴘ':'p','ǫ':'q','ʀ':'r',
+    'ꜱ':'s','ᴛ':'t','ᴜ':'u','ᴠ':'v','ᴡ':'w','ʏ':'y','ᴢ':'z',
+  };
+  return str.split('').map(c => map[c] ?? c).join('');
+}
+
+function extractTextFromNode(node) {
+  if (typeof node === 'string') return node;
+  if (!node || typeof node !== 'object') return '';
+  let t = node.text || '';
+  if (Array.isArray(node.extra)) t += node.extra.map(extractTextFromNode).join('');
+  return t;
+}
+
+function parseSnbtToJson(snbt) {
+  return snbt
+    .replace(/([{,\[])\s*([a-zA-Z_][a-zA-Z_0-9]*)\s*:/g, '$1"$2":')
+    .replace(/:(\d+)b/gi, ':$1');
+}
+
+function parseStoredEnchantments(dn) {
+  const match = dn.match(/stored_enchantments:'\{([^}]+)\}'/);
+  if (!match) return null;
+  try {
+    const obj = JSON.parse('{' + match[1] + '}');
+    const parts = Object.entries(obj).map(([key, lvl]) => {
+      const name = ENCHANT_NAMES[key] || key.split(':')[1].replace(/_/g, ' ');
+      return lvl > 1 ? name + ' ' + (ROMAN[lvl] || lvl) : name;
+    });
+    return parts.length ? parts.join(', ') : null;
+  } catch (_) { return null; }
 }
 
 function parseItemName(item) {
   const dn = item.displayName;
-  const itemNameMatch = dn.match(/\],text:"([^"]{2,60})"/) || dn.match(/lang:chat\.square_brackets:'<[^>]+>([^<'"]{2,60})/);
-  if (itemNameMatch) {
-    const cleaned = stripSmallCaps(itemNameMatch[1]).trim().replace(/\s+/g, ' ');
-    if (cleaned.length > 1) return cleaned.replace(/\b\w/g, c => c.toUpperCase());
+
+  // ── 1. custom_name avec extra (clef_vote, clef_premium, gemme…)
+  const customNameMatch = dn.match(/custom_name:'(\{[^']+\})'/);
+  if (customNameMatch) {
+    try {
+      const obj = JSON.parse(parseSnbtToJson(customNameMatch[1]));
+      const name = extractTextFromNode(obj).trim();
+      if (name.length > 1) return stripSmallCaps(name);
+    } catch (_) {
+      const texts = [...customNameMatch[1].matchAll(/"text"\s*:\s*"([^"]*)"/g)];
+      const name = texts.map(m => m[1]).join('').trim();
+      if (name.length > 1) return stripSmallCaps(name);
+    }
   }
+
+  // ── 2. item_name string simple (lingot_dacier_brut)
+  const simpleNameMatch = dn.match(/item_name:'"([^'"]{2,80})"'/);
+  if (simpleNameMatch) return stripSmallCaps(simpleNameMatch[1].trim());
+
+  // ── 3. item_name avec extra JSON (block-breaker, pierre_mystique, épée…)
+  const itemNameJson = dn.match(/item_name:'(\{[^']+\})'/);
+  if (itemNameJson) {
+    try {
+      const obj = JSON.parse(parseSnbtToJson(itemNameJson[1]));
+      const name = extractTextFromNode(obj).trim();
+      if (name.length > 1) return stripSmallCaps(name);
+    } catch (_) {
+      const texts = [...itemNameJson[1].matchAll(/"text"\s*:\s*"([^"]*)"/g)];
+      const name = texts.map(m => m[1]).join('').trim();
+      if (name.length > 1) return stripSmallCaps(name);
+    }
+  }
+
+  // ── 4. MiniMessage dans lang:chat.square_brackets
+  const miniMsg = dn.match(/lang:chat\.square_brackets:'([\s\S]+?)'\s*>/);
+  if (miniMsg) {
+    const name = miniMsg[1].replace(/<[^>]+>/g, '').trim();
+    if (name.length > 1) return stripSmallCaps(name);
+  }
+
+  // ── 5. Vanilla lang key
+  const langKey = dn.match(/<lang:(block|item)\.minecraft\.([a-z_]+)>/);
+  if (langKey) {
+    const key = langKey[2];
+    if (key === 'enchanted_book') {
+      const enchants = parseStoredEnchantments(dn);
+      return enchants ? 'Livre : ' + enchants : 'Livre Enchanté';
+    }
+    return MC_NAMES[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  // ── 6. Oraxen ID fallback
   const oraxenId = dn.match(/oraxen:id[^a-z_0-9][^"]*"([a-z_0-9]+)"/);
   if (oraxenId) return ORAXEN_NAMES[oraxenId[1]] || oraxenId[1].replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   const o = dn.match(/oraxen:([a-z_0-9]+)/);
   if (o) return ORAXEN_NAMES[o[1]] || o[1].replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-  const l = dn.match(/<lang:([^>]+)>/);
-  if (l) {
-    const map = {
-      'block.minecraft.jungle_sapling': 'Pousse de Jungle', 'block.minecraft.beacon': 'Balise',
-      'item.minecraft.splash_potion.effect.weakness': 'Potion de Faiblesse', 'item.minecraft.enchanted_book': 'Livre Enchanté',
-    };
-    if (map[l[1]]) return map[l[1]];
-    const parts = l[1].split('.');
-    return parts[parts.length - 1].replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-  }
+
   return 'Objet Inconnu';
 }
 
@@ -548,26 +671,18 @@ async function loadPlayers() {
 }
 
 window.toggleMenu = function() {
-    const nav = document.getElementById('mainNav');
-    const btn = document.getElementById('burgerBtn');
-    nav.classList.toggle('open');
-    btn.classList.toggle('open');
-}
-
-// Modifie ta fonction showPage existante pour fermer le menu auto
-const originalShowPage = window.showPage;
-window.showPage = function(pageId) {
-    // On appelle la logique d'origine
-    originalShowPage(pageId);
-    
-    // On ferme le menu si on est sur mobile
-    const nav = document.getElementById('mainNav');
-    const btn = document.getElementById('burgerBtn');
-    if (nav.classList.contains('open')) {
-        toggleMenu();
-    }
+  const nav = document.getElementById('mainNav');
+  const btn = document.getElementById('burgerBtn');
+  nav.classList.toggle('open');
+  btn.classList.toggle('open');
 };
 
+const originalShowPage = window.showPage;
+window.showPage = function(pageId) {
+  originalShowPage(pageId);
+  const nav = document.getElementById('mainNav');
+  if (nav.classList.contains('open')) toggleMenu();
+};
 
 function renderPlayers() {
   if (!playersData) return;
