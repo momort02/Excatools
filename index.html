@@ -17,13 +17,17 @@
     <div class="logo-sub">Companion Excalia.fr</div>
     <div class="logo-divider"></div>
   </div>
-  <nav class="nav">
+
+  <button class="burger-menu" id="burgerBtn" onclick="toggleMenu()">
+    <span></span>
+    <span></span>
+    <span></span>
+  </button>
+
+  <nav class="nav" id="mainNav">
     <button class="nav-btn active" id="navMarket" onclick="showPage('market')">⚔ Marché</button>
-    <button class="nav-btn" id="navPrices" onclick="showPage('prices')">📈 Prix</button>
-    <button class="nav-btn" id="navAlerts" onclick="showPage('alerts')">🔔 Alertes</button>
-    <button class="nav-btn" id="navIsland" onclick="showPage('island')">🏝 Îles</button>
-    <button class="nav-btn" id="navPlayers" onclick="showPage('players')">👥 En ligne</button>
-  </nav>
+    </nav>
+
   <div class="header-stats">
     <div class="stat">
       <div class="stat-value" id="statActive">—</div>
