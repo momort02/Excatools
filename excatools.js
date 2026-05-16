@@ -746,10 +746,19 @@ window.toggleMenu = function() {
 };
 
 const originalShowPage = window.showPage;
-window.showPage = function(pageId) {
-  originalShowPage(pageId);
-  const nav = document.getElementById('mainNav');
-  if (nav.classList.contains('open')) toggleMenu();
+window.showPage = function(page) {
+  ['market', 'prices', 'alerts', 'island', 'players'].forEach(p => {
+    const el = document.getElementById(p + 'Page');
+    const nav = document.getElementById('nav' + p.charAt(0).toUpperCase() + p.slice(1));
+    if (el) {
+      if (p === 'market') el.classList.toggle('hidden', page !== 'market');
+      else el.classList.toggle('visible', page === p);
+    }
+    if (nav) nav.classList.toggle('active', page === p);  // ← guard ajouté
+  });
+  if (page === 'prices') loadPriceHistory();
+  if (page === 'alerts') { loadAlerts(); loadPriceHistoryForAutocomplete(); }
+  if (page === 'players') loadPlayers();
 };
 
 function renderPlayers() {
