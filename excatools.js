@@ -10,6 +10,63 @@ const firebaseConfig = {
   appId: "1:471103011145:web:da2d972cd7d0224b89c298"
 };
 
+const ENCHANT_NAMES = {
+  'minecraft:mending': 'Réparation',
+  'minecraft:protection': 'Protection',
+  'minecraft:unbreaking': 'Solidité',
+  'minecraft:sharpness': 'Tranchant',
+  'minecraft:efficiency': 'Efficacité',
+  'minecraft:fortune': 'Fortune',
+  'minecraft:silk_touch': 'Toucher de Soie',
+  'minecraft:looting': 'Butin',
+  'minecraft:fire_aspect': 'Aspect de Feu',
+  'minecraft:knockback': 'Recul',
+  'minecraft:sweeping_edge': 'Taille en Éventail',
+  'minecraft:depth_strider': 'Foulée des Profondeurs',
+  'minecraft:feather_falling': 'Chute Amortie',
+  'minecraft:blast_protection': 'Protection contre les Explosions',
+  'minecraft:fire_protection': 'Protection contre le Feu',
+  'minecraft:projectile_protection': 'Protection contre les Projectiles',
+  'minecraft:respiration': 'Respiration',
+  'minecraft:aqua_affinity': 'Affinité Aquatique',
+  'minecraft:thorns': 'Épines',
+  'minecraft:frost_walker': 'Pas Givrés',
+  'minecraft:soul_speed': 'Vitesse des Âmes',
+  'minecraft:swift_sneak': 'Furtivité Rapide',
+  'minecraft:power': 'Puissance',
+  'minecraft:punch': 'Recul',
+  'minecraft:flame': 'Flamme',
+  'minecraft:infinity': 'Infini',
+  'minecraft:luck_of_the_sea': 'Chance de la Mer',
+  'minecraft:lure': 'Appât',
+  'minecraft:channeling': 'Canalisation',
+  'minecraft:impaling': 'Embrocher',
+  'minecraft:loyalty': 'Loyauté',
+  'minecraft:riptide': 'Raz-de-Marée',
+  'minecraft:multishot': 'Multitir',
+  'minecraft:piercing': 'Pénétration',
+  'minecraft:quick_charge': 'Chargement Rapide',
+  'minecraft:bane_of_arthropods': 'Fléau des Arthropodes',
+  'minecraft:smite': 'Châtiment',
+};
+
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
+
+function parseStoredEnchantments(displayName) {
+  const match = displayName.match(/stored_enchantments:'\{([^}]+)\}'/);
+  if (!match) return null;
+  try {
+    const obj = JSON.parse('{' + match[1] + '}');
+    const parts = Object.entries(obj).map(([key, lvl]) => {
+      const name = ENCHANT_NAMES[key] || key.split(':')[1].replace(/_/g, ' ');
+      return lvl > 1 ? name + ' ' + (ROMAN[lvl] || lvl) : name;
+    });
+    return parts.join(', ');
+  } catch (_) {
+    return null;
+  }
+}
+
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
@@ -137,19 +194,15 @@ function parseItemName(item) {
     if (name.length > 1) return stripSmallCaps(name);
   }
 
-  // ── 5. Vanilla lang key  (iron_block, apple, netherite_boots…)
-  const langKey = dn.match(/<lang:(block|item)\.minecraft\.([a-z_]+)>/);
+  // ── 5. Vanilla lang key
+  const langKey = displayName.match(/<lang:(block|item)\.minecraft\.([a-z_]+)>/);
   if (langKey) {
-    const MC_NAMES = {
-      iron_block: 'Bloc de Fer', gold_block: 'Bloc d\'Or', diamond_block: 'Bloc de Diamant',
-      netherite_boots: 'Bottes en Netherite', netherite_chestplate: 'Plastron en Netherite',
-      netherite_leggings: 'Jambières en Netherite', netherite_helmet: 'Casque en Netherite',
-      netherite_sword: 'Épée en Netherite', netherite_scrap: 'Débris Anciens',
-      apple: 'Pomme', bamboo: 'Bambou',
-      beacon: 'Balise', jungle_sapling: 'Pousse de Jungle',
-      enchanted_book: 'Livre Enchanté',
-    };
     const key = langKey[2];
+    // Livre enchanté : on extrait les enchantements
+    if (key === 'enchanted_book') {
+      const enchants = parseStoredEnchantments(displayName);
+      return enchants ? 'Livre : ' + enchants : 'Livre Enchanté';
+    }
     return MC_NAMES[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   }
 
