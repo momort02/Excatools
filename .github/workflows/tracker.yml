@@ -2,7 +2,7 @@ name: ExcaTools Price Tracker
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -27,7 +27,7 @@ jobs:
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
-          (END=$((SECONDS + 570))
+          END=$((SECONDS + 270))
           while [ $SECONDS -lt $END ]; do
             echo "--- Cycle at $(date) ---"
             node tracker.js
@@ -37,4 +37,3 @@ jobs:
             fi
           done
         working-directory: scripts
-
