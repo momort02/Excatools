@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Excatools</title>
+<title>ExcaTools</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Pro:ital,wght@0,300;0,400;1,300;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="excatools.css">
@@ -12,12 +12,14 @@
 
 <header>
   <div class="logo">
-    <div class="logo-title">EXCALIA</div>
-    <div class="logo-sub">Hôtel des Ventes &amp; Îles</div>
+    <div class="logo-title">EXCATOOLS</div>
+    <div class="logo-sub">Companion Excalia.fr</div>
     <div class="logo-divider"></div>
   </div>
   <nav class="nav">
     <button class="nav-btn active" id="navMarket" onclick="showPage('market')">⚔ Marché</button>
+    <button class="nav-btn" id="navPrices" onclick="showPage('prices')">📈 Prix</button>
+    <button class="nav-btn" id="navAlerts" onclick="showPage('alerts')">🔔 Alertes</button>
     <button class="nav-btn" id="navIsland" onclick="showPage('island')">🏝 Îles</button>
     <button class="nav-btn" id="navPlayers" onclick="showPage('players')">👥 En ligne</button>
   </nav>
@@ -31,14 +33,10 @@
       <div class="stat-value" id="statSold">—</div>
       <div class="stat-label">Vendus (24h)</div>
     </div>
-    <div class="stat-divider"></div>
-    <div class="stat">
-      <div class="stat-value" id="statCats">—</div>
-      <div class="stat-label">Catégories</div>
-    </div>
   </div>
 </header>
 
+<!-- MARCHÉ -->
 <div id="marketPage">
   <main>
     <div class="cats-bar" id="catsBar"></div>
@@ -63,6 +61,73 @@
   </main>
 </div>
 
+<!-- HISTORIQUE DES PRIX -->
+<div id="pricesPage">
+  <div class="page-inner">
+    <div class="page-title-bar">
+      <div class="page-title">📈 Historique des prix</div>
+      <input type="search" id="priceSearch" class="price-search" placeholder="Rechercher un item…">
+    </div>
+    <div id="pricesList" class="prices-list">
+      <div class="loading"><div class="loader"></div>Chargement…</div>
+    </div>
+  </div>
+</div>
+
+<!-- CHART MODAL -->
+<div id="chartModal" class="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modalTitle">Historique</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="chart-tabs">
+        <button class="chart-tab active" onclick="setChartRange(24)">24h</button>
+        <button class="chart-tab" onclick="setChartRange(168)">7j</button>
+        <button class="chart-tab" onclick="setChartRange(720)">30j</button>
+      </div>
+      <canvas id="priceChart" width="600" height="260"></canvas>
+      <div class="modal-stats" id="modalStats"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-gold" onclick="openAlertFromModal()">🔔 Créer une alerte pour cet item</button>
+    </div>
+  </div>
+</div>
+
+<!-- ALERTES -->
+<div id="alertsPage">
+  <div class="page-inner">
+    <div class="page-title-bar">
+      <div class="page-title">🔔 Alertes Discord</div>
+    </div>
+    <div class="alert-create-card">
+      <div class="alert-create-title">✦ Nouvelle alerte</div>
+      <div class="alert-form">
+        <div class="form-group">
+          <label>Item</label>
+          <input type="text" id="alertItemInput" placeholder="Tapez un nom d'item…" autocomplete="off">
+          <div class="autocomplete-dropdown" id="alertAutocomplete"></div>
+        </div>
+        <div class="form-group">
+          <label>Prix max</label>
+          <input type="number" id="alertPrice" placeholder="Ex: 50000" min="1">
+        </div>
+        <div class="form-group" style="flex:2">
+          <label>Webhook Discord</label>
+          <input type="url" id="alertWebhook" placeholder="https://discord.com/api/webhooks/…">
+        </div>
+        <button class="btn-gold" onclick="createAlert()">Créer</button>
+      </div>
+    </div>
+    <div id="alertsList" class="alerts-list">
+      <div class="loading"><div class="loader"></div>Chargement…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ÎLES -->
 <div id="islandPage">
   <div class="island-search-wrap">
     <div class="island-search-title">Rechercher une île par <span>ID</span></div>
@@ -77,12 +142,14 @@
   <div id="islandResult"></div>
 </div>
 
+<!-- JOUEURS EN LIGNE -->
 <div id="playersPage">
   <div style="max-width:900px;margin:0 auto;padding:2rem 2rem 4rem">
     <div id="playersContent"><div class="loading"><div class="loader"></div>Chargement…</div></div>
   </div>
 </div>
 
-<script src="excatools.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script type="module" src="excatools.js"></script>
 </body>
 </html>
