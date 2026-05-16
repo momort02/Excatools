@@ -368,3 +368,42 @@ input[type="search"]:focus { border-color: var(--gold-dim); box-shadow: 0 0 0 2p
   .header-stats { display: none; }
   .island-sections { grid-template-columns: 1fr; }
 }
+/* --- Correction Responsive Nav --- */
+@media (max-width: 900px) {
+  header {
+    flex-direction: column;
+    align-items: center;
+    padding: 1rem 0.5rem;
+    gap: 1rem;
+  }
+
+  .nav {
+    width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto; /* Permet le scroll horizontal */
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 5px;
+    margin-left: 0;
+    scrollbar-width: none; /* Cache la scrollbar sur Firefox */
+  }
+
+  .nav::-webkit-scrollbar {
+    display: none; /* Cache la scrollbar sur Chrome/Safari */
+  }
+
+  .nav-btn {
+    padding: 0.6rem 1rem;
+    font-size: 0.7rem; /* Un peu plus grand pour le tactile */
+    flex-shrink: 0; /* Empêche les boutons de rétrécir */
+  }
+
+  .logo {
+    align-items: center;
+  }
+
+  /* Cache les stats sur mobile pour gagner de la place */
+  .header-stats {
+    display: none; 
+  }
+}
